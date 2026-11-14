@@ -1,0 +1,14 @@
+telegram:
+  enabled: false
+  bot_token: "VOTRE_BOT_TOKEN_ICI"
+  chat_id: "VOTRE_CHAT_ID_ICI"
+
+discord:
+  enabled: false
+  webhook_url: "VOTRE_DISCORD_WEBHOOK_ICI"
+
+settings:
+  alert_on_new_buy: true       # Alerte Niveau 1 : Nouveau Signal Achat
+  alert_on_new_sell: true      # Alerte Niveau 1 : Nouveau Signal Vente
+  alert_on_slowdown: true      # Alerte Niveau 2 : Début de ralentissement (Sécurisation)
+  alert_on_breakout: true      # Alerte Niveau 3 : Sortie de consolidation haussière
