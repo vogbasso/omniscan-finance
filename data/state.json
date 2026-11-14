@@ -1,0 +1,205 @@
+{
+  "NVDA": {
+    "symbol": "NVDA",
+    "price": 162.85,
+    "regime": "regime_bear",
+    "state": "state_slowdown_bull",
+    "name": "Nvidia"
+  },
+  "AAPL": {
+    "symbol": "AAPL",
+    "price": 356.27,
+    "regime": "regime_bull",
+    "state": "state_strong_bull",
+    "name": "Apple"
+  },
+  "MSFT": {
+    "symbol": "MSFT",
+    "price": 523.88,
+    "regime": "regime_bull",
+    "state": "state_strong_bull",
+    "name": "Microsoft"
+  },
+  "AMZN": {
+    "symbol": "AMZN",
+    "price": 266.66,
+    "regime": "regime_bear",
+    "state": "state_strong_bull",
+    "name": "Amazon"
+  },
+  "GOOGL": {
+    "symbol": "GOOGL",
+    "price": 295.77,
+    "regime": "regime_bear",
+    "state": "state_slowdown_bull",
+    "name": "Alphabet (Google)"
+  },
+  "META": {
+    "symbol": "META",
+    "price": 641.69,
+    "regime": "regime_bear",
+    "state": "state_strong_bull",
+    "name": "Meta Platforms"
+  },
+  "TSLA": {
+    "symbol": "TSLA",
+    "price": 390.22,
+    "regime": "regime_bull",
+    "state": "state_consolidation",
+    "name": "Tesla"
+  },
+  "BRK-B": {
+    "symbol": "BRK-B",
+    "price": 592.94,
+    "regime": "regime_bull",
+    "state": "state_strong_bull",
+    "name": "Berkshire Hathaway"
+  },
+  "AVGO": {
+    "symbol": "AVGO",
+    "price": 347.01,
+    "regime": "regime_bear",
+    "state": "state_slowdown_bull",
+    "name": "Broadcom"
+  },
+  "JPM": {
+    "symbol": "JPM",
+    "price": 346.19,
+    "regime": "regime_bull",
+    "state": "state_strong_bull",
+    "name": "JPMorgan Chase"
+  },
+  "LLY": {
+    "symbol": "LLY",
+    "price": 1443.5,
+    "regime": "regime_bull",
+    "state": "state_strong_bull",
+    "name": "Eli Lilly"
+  },
+  "V": {
+    "symbol": "V",
+    "price": 425.76,
+    "regime": "regime_bull",
+    "state": "state_strong_bull",
+    "name": "Visa"
+  },
+  "WMT": {
+    "symbol": "WMT",
+    "price": 128.09,
+    "regime": "regime_bear",
+    "state": "state_strong_bull",
+    "name": "Walmart"
+  },
+  "XOM": {
+    "symbol": "XOM",
+    "price": 170.59,
+    "regime": "regime_bull",
+    "state": "state_strong_bull",
+    "name": "ExxonMobil"
+  },
+  "MA": {
+    "symbol": "MA",
+    "price": 661.19,
+    "regime": "regime_bull",
+    "state": "state_strong_bull",
+    "name": "Mastercard"
+  },
+  "BTC/USDT": {
+    "symbol": "BTC/USDT",
+    "price": 64548.01,
+    "regime": "regime_bull",
+    "state": "state_strong_bear",
+    "name": "BTC"
+  },
+  "USDC/USDT": {
+    "symbol": "USDC/USDT",
+    "price": 1.0005,
+    "regime": "regime_bear",
+    "state": "state_strong_bull",
+    "name": "USDC"
+  },
+  "ETH/USDT": {
+    "symbol": "ETH/USDT",
+    "price": 1780.98,
+    "regime": "regime_bull",
+    "state": "state_strong_bear",
+    "name": "ETH"
+  },
+  "SOL/USDT": {
+    "symbol": "SOL/USDT",
+    "price": 69.98,
+    "regime": "regime_bull",
+    "state": "state_strong_bear",
+    "name": "SOL"
+  },
+  "XRP/USDT": {
+    "symbol": "XRP/USDT",
+    "price": 0.9135,
+    "regime": "regime_bear",
+    "state": "state_strong_bear",
+    "name": "XRP"
+  },
+  "ZEC/USDT": {
+    "symbol": "ZEC/USDT",
+    "price": 828.13,
+    "regime": "regime_bear",
+    "state": "state_strong_bull",
+    "name": "ZEC"
+  },
+  "USD1/USDT": {
+    "symbol": "USD1/USDT",
+    "price": 0.9988,
+    "regime": "regime_bear",
+    "state": "state_strong_bear",
+    "name": "USD1"
+  },
+  "BNB/USDT": {
+    "symbol": "BNB/USDT",
+    "price": 578.87,
+    "regime": "regime_bear",
+    "state": "state_strong_bear",
+    "name": "BNB"
+  },
+  "NEAR/USDT": {
+    "symbol": "NEAR/USDT",
+    "price": 2.941,
+    "regime": "regime_bull",
+    "state": "state_strong_bull",
+    "name": "NEAR"
+  },
+  "DOGE/USDT": {
+    "symbol": "DOGE/USDT",
+    "price": 0.0571,
+    "regime": "regime_bear",
+    "state": "state_strong_bear",
+    "name": "DOGE"
+  },
+  "UNI/USDT": {
+    "symbol": "UNI/USDT",
+    "price": 4.731,
+    "regime": "regime_bear",
+    "state": "state_new_sell",
+    "name": "UNI"
+  },
+  "PEPE/USDT": {
+    "symbol": "PEPE/USDT",
+    "price": 0.0,
+    "regime": "regime_bear",
+    "state": "state_slowdown_bear",
+    "name": "PEPE"
+  },
+  "SUI/USDT": {
+    "symbol": "SUI/USDT",
+    "price": 0.6933,
+    "regime": "regime_bear",
+    "state": "state_strong_bear",
+    "name": "SUI"
+  },
+  "RLUSD/USDT": {
+    "symbol": "RLUSD/USDT",
+    "price": 1.0007,
+    "regime": "regime_bull",
+    "state": "state_strong_bull",
+    "name": "RLUSD"
+  }
+}
