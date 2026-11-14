@@ -1,0 +1,21 @@
+{
+  "app_title": "OmniScan Finance - Regime & Triple MA Screener (5 / 20 / 80)",
+  "author": "Author & Architect: Vogel Paolo BASSO",
+  "menu_crypto": "Cryptocurrencies (Top Binance)",
+  "menu_stocks": "US Equities (S&P 500)",
+  "scanning": "Scanning {count} assets...",
+  "scan_completed": "Scan completed. {found} assets analyzed.",
+  "col_symbol": "Symbol",
+  "col_price": "Price ($)",
+  "col_regime": "Market Regime",
+  "col_state": "Instant Momentum",
+  "regime_bull": "🟢 BULLISH",
+  "regime_bear": "🔴 BEARISH",
+  "state_new_buy": "🔥 NEW BUY SIGNAL",
+  "state_new_sell": "🚨 NEW SELL SIGNAL",
+  "state_strong_bull": "🚀 Strong Bull Trend",
+  "state_strong_bear": "🔻 Strong Bear Trend",
+  "state_slowdown_bull": "⚠️ Bullish Slowdown",
+  "state_slowdown_bear": "⚠️ Bearish Slowdown",
+  "state_consolidation": "⏳ Consolidation"
+}

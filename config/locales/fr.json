@@ -1,0 +1,21 @@
+{
+  "app_title": "OmniScan Finance - Screener de Régime & Triple MM (5 / 20 / 80)",
+  "author": "Auteur & Concepteur : Vogel Paolo BASSO",
+  "menu_crypto": "Cryptomonnaies (Top Binance)",
+  "menu_stocks": "Actions US (S&P 500)",
+  "scanning": "Scan de {count} actifs en cours...",
+  "scan_completed": "Scan terminé. {found} actifs analysés.",
+  "col_symbol": "Symbole",
+  "col_price": "Prix ($)",
+  "col_regime": "Tendance de Fond",
+  "col_state": "Dynamique Instantanée",
+  "regime_bull": "🟢 ACHETEUR",
+  "regime_bear": "🔴 VENDEUR",
+  "state_new_buy": "🔥 NOUVEAU SIGNAL ACHAT",
+  "state_new_sell": "🚨 NOUVEAU SIGNAL VENTE",
+  "state_strong_bull": "🚀 Tendance Forte Hausse",
+  "state_strong_bear": "🔻 Tendance Forte Baisse",
+  "state_slowdown_bull": "⚠️ Ralentissement Hausse",
+  "state_slowdown_bear": "⚠️ Ralentissement Baisse",
+  "state_consolidation": "⏳ Consolidation"
+}
