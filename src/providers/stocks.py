@@ -1,9 +1,17 @@
+import os
+os.environ["PYTHONWARNINGS"] = "ignore"
 import warnings
-warnings.simplefilter("ignore")
 warnings.filterwarnings("ignore")
 
+try:
+    import pandas as pd
+    from pandas.errors import Pandas4Warning, PandasChangeWarning
+    warnings.filterwarnings("ignore", category=Pandas4Warning)
+    warnings.filterwarnings("ignore", category=PandasChangeWarning)
+except Exception:
+    pass
+
 import yfinance as yf
-import pandas as pd
 from typing import List, Dict, Any
 from src.core.indicators import TechnicalIndicators
 
