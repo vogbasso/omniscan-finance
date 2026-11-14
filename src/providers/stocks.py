@@ -1,10 +1,13 @@
+import warnings
+warnings.simplefilter("ignore")
+warnings.filterwarnings("ignore")
+
 import yfinance as yf
 import pandas as pd
 from typing import List, Dict, Any
 from src.core.indicators import TechnicalIndicators
 
 class USStocksProvider:
-    # Sélection des méga-capitalisations et leaders du S&P 500
     DEFAULT_SP500 = [
         {"symbol": "NVDA", "name": "Nvidia"},
         {"symbol": "AAPL", "name": "Apple"},
@@ -34,7 +37,6 @@ class USStocksProvider:
             if df.empty or len(df) < 25:
                 return {}
 
-            # Calcul des MM 5, 20 et 80
             df['ma5'] = TechnicalIndicators.calculate_ema(df['Close'], span=5)
             df['ma20'] = TechnicalIndicators.calculate_ema(df['Close'], span=20)
             df['ma80'] = TechnicalIndicators.calculate_ema(df['Close'], span=80)

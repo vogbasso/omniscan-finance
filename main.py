@@ -1,8 +1,9 @@
-import sys
-import json
 import warnings
+warnings.simplefilter("ignore")
 warnings.filterwarnings("ignore")
 
+import sys
+import json
 from src.providers.crypto import BinanceCryptoProvider
 from src.providers.stocks import USStocksProvider
 
