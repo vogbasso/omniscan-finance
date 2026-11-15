@@ -310,13 +310,13 @@ if results:
     if df_chart is not None and not df_chart.empty:
         # Sécurité : vérification et calcul automatique si nécessaire
         if 'ma5' not in df_chart.columns:
-            df_chart['ma5'] = TechnicalIndicators.calculate_ema(df_chart['Close'], span=5)
+            df_chart['ma5'] = TechnicalIndicators.calculate_sma(df_chart['Close'], window=5)
         if 'ma20' not in df_chart.columns:
-            df_chart['ma20'] = TechnicalIndicators.calculate_ema(df_chart['Close'], span=20)
+            df_chart['ma20'] = TechnicalIndicators.calculate_sma(df_chart['Close'], window=20)
         if 'ma80' not in df_chart.columns:
-            df_chart['ma80'] = TechnicalIndicators.calculate_ema(df_chart['Close'], span=80)
+            df_chart['ma80'] = TechnicalIndicators.calculate_sma(df_chart['Close'], window=80)
         if 'ma320' not in df_chart.columns:
-            df_chart['ma320'] = TechnicalIndicators.calculate_ema(df_chart['Close'], span=320)
+            df_chart['ma320'] = TechnicalIndicators.calculate_sma(df_chart['Close'], window=320)
 
         # Choix de la moyenne lente et du BBW selon la méthode
         active_macro_col = 'ma320' if is_rsi_strategy else 'ma80'

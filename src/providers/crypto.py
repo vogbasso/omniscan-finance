@@ -106,10 +106,10 @@ class BinanceCryptoProvider:
                 return {}
 
             # Calcul des MM
-            df['ma5'] = TechnicalIndicators.calculate_ema(df['Close'], span=5)
-            df['ma20'] = TechnicalIndicators.calculate_ema(df['Close'], span=20)
-            df['ma80'] = TechnicalIndicators.calculate_ema(df['Close'], span=80)
-            df['ma320'] = TechnicalIndicators.calculate_ema(df['Close'], span=320)
+            df['ma5'] = TechnicalIndicators.calculate_sma(df['Close'], window=5)
+            df['ma20'] = TechnicalIndicators.calculate_sma(df['Close'], window=20)
+            df['ma80'] = TechnicalIndicators.calculate_sma(df['Close'], window=80)
+            df['ma320'] = TechnicalIndicators.calculate_sma(df['Close'], window=320)
             df['rsi21'] = TechnicalIndicators.calculate_rsi(df['Close'], period=21)
 
             # Calcul explicite des deux BBW (80 et 320)

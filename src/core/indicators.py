@@ -4,8 +4,9 @@ from typing import Tuple, Dict, Any, List
 
 class TechnicalIndicators:
     @staticmethod
-    def calculate_ema(series: pd.Series, span: int) -> pd.Series:
-        return series.ewm(span=span, adjust=False).mean()
+    def calculate_sma(series: pd.Series, window: int) -> pd.Series:
+        """Moyenne Mobile Simple (SMA) avec min_periods adaptatif pour éviter les NaN"""
+        return series.rolling(window=window, min_periods=1).mean()
 
     @staticmethod
     def calculate_rsi(series: pd.Series, period: int = 21) -> pd.Series:
@@ -33,11 +34,11 @@ class TechnicalIndicators:
 
     @staticmethod
     def calculate_paolo_bbw_compression(df: pd.DataFrame, period: int = 80, dev: float = 2.0, lookback: int = 52) -> Dict[str, Any]:
-        """Calcul universel de Paolo BBW paramétrable (base 80 ou 320)"""
+        """Paolo BBW avec bande médiane strictement en SMA"""
         close = df['Close'] if 'Close' in df.columns else df['close']
         ma_col = f"ma{period}"
-        middle = df[ma_col] if ma_col in df.columns else close.ewm(span=period, adjust=False).mean()
-        rolling_std = close.rolling(window=min(period, len(close)), min_periods=25).std().fillna(close.std())
+        middle = df[ma_col] if ma_col in df.columns else close.rolling(window=period, min_periods=1).mean()
+        rolling_std = close.rolling(window=min(period, len(close)), min_periods=15).std().fillna(close.std())
         
         upper = middle + (dev * rolling_std)
         lower = middle - (dev * rolling_std)
@@ -63,7 +64,7 @@ class TechnicalIndicators:
 
     @staticmethod
     def evaluate_regime_and_state(df: pd.DataFrame) -> Tuple[str, str]:
-        """MÉTHODE 2 : STRATÉGIE TRIPLE MM STRICTEMENT SUR BASE 5 / 20 / 80"""
+        """Méthode 2 : Triple MM Simple (SMA 5 / 20 / 80)"""
         regime = "regime_bull" if df['ma20'].iloc[0] > df['ma80'].iloc[0] else "regime_bear"
         is_fresh_signal = False
         last_signal = None
@@ -112,7 +113,7 @@ class TechnicalIndicators:
 
     @staticmethod
     def evaluate_rsi21_polarity_strategy(df: pd.DataFrame) -> Dict[str, Any]:
-        """MÉTHODE 1 : STRATÉGIE RSI 21 SUR BASE MM 5, MM 20 ET MM 320"""
+        """Méthode 1 : RSI 21 sur base Moyennes Mobiles Simples (SMA 5, SMA 20, SMA 320)"""
         polarity = "POLARITY_BEAR"
         for r in df['rsi21']:
             if r >= 70:
@@ -168,6 +169,7 @@ class TechnicalIndicators:
                     else:
                         current_pullback_lowest = min(current_pullback_lowest, low)
 
+                # Croisement SMA 5 > SMA 20
                 is_crossover = (prev_m5 <= prev_m20 and m5 > m20)
                 if pullback_in_progress and is_crossover:
                     trade_count += 1
