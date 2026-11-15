@@ -19,10 +19,101 @@ def fmt_currency(val: float) -> str:
         return f"${val/1e3:.2f}k"
     return f"${val:.2f}"
 
-from src.providers.crypto import BinanceCryptoProvider
-
-# Catalogue étendu
-from src.providers.markets import MARKET_CATALOG
+MARKET_CATALOG = {
+    "stocks": [
+        {"symbol": "NVDA", "name": "Nvidia"},
+        {"symbol": "AAPL", "name": "Apple"},
+        {"symbol": "MSFT", "name": "Microsoft"},
+        {"symbol": "AMZN", "name": "Amazon"},
+        {"symbol": "GOOGL", "name": "Alphabet (Google)"},
+        {"symbol": "META", "name": "Meta Platforms"},
+        {"symbol": "TSLA", "name": "Tesla"},
+        {"symbol": "BRK-B", "name": "Berkshire Hathaway"},
+        {"symbol": "AVGO", "name": "Broadcom"},
+        {"symbol": "JPM", "name": "JPMorgan Chase"},
+        {"symbol": "LLY", "name": "Eli Lilly"},
+        {"symbol": "V", "name": "Visa"},
+        {"symbol": "WMT", "name": "Walmart"},
+        {"symbol": "XOM", "name": "ExxonMobil"},
+        {"symbol": "MA", "name": "Mastercard"},
+        {"symbol": "ORCL", "name": "Oracle"},
+        {"symbol": "COST", "name": "Costco"},
+        {"symbol": "HD", "name": "Home Depot"},
+        {"symbol": "PG", "name": "Procter & Gamble"},
+        {"symbol": "NFLX", "name": "Netflix"},
+        {"symbol": "BAC", "name": "Bank of America"},
+        {"symbol": "CRM", "name": "Salesforce"},
+        {"symbol": "ABBV", "name": "AbbVie"},
+        {"symbol": "CVX", "name": "Chevron"},
+        {"symbol": "KO", "name": "Coca-Cola"},
+        {"symbol": "AMD", "name": "AMD"},
+        {"symbol": "PEP", "name": "PepsiCo"},
+        {"symbol": "LIN", "name": "Linde"},
+        {"symbol": "TMO", "name": "Thermo Fisher"},
+        {"symbol": "ADBE", "name": "Adobe"},
+        {"symbol": "MRK", "name": "Merck"},
+        {"symbol": "PLTR", "name": "Palantir Technologies"},
+        {"symbol": "DIS", "name": "Walt Disney"},
+        {"symbol": "QCOM", "name": "Qualcomm"},
+        {"symbol": "INTU", "name": "Intuit"},
+        {"symbol": "IBM", "name": "IBM"},
+        {"symbol": "CAT", "name": "Caterpillar"},
+        {"symbol": "TXN", "name": "Texas Instruments"},
+        {"symbol": "NOW", "name": "ServiceNow"},
+        {"symbol": "GE", "name": "General Electric"},
+        {"symbol": "UBER", "name": "Uber Technologies"},
+        {"symbol": "AMAT", "name": "Applied Materials"},
+        {"symbol": "VZ", "name": "Verizon"},
+        {"symbol": "PFE", "name": "Pfizer"},
+        {"symbol": "UNH", "name": "UnitedHealth"},
+        {"symbol": "INTC", "name": "Intel"},
+        {"symbol": "BA", "name": "Boeing"},
+        {"symbol": "NKE", "name": "Nike"},
+        {"symbol": "SBUX", "name": "Starbucks"},
+        {"symbol": "COIN", "name": "Coinbase"}
+    ],
+    "forex": [
+        {"symbol": "EURUSD=X", "name": "EUR / USD"},
+        {"symbol": "GBPUSD=X", "name": "GBP / USD"},
+        {"symbol": "USDJPY=X", "name": "USD / JPY"},
+        {"symbol": "USDCHF=X", "name": "USD / CHF"},
+        {"symbol": "AUDUSD=X", "name": "AUD / USD"},
+        {"symbol": "USDCAD=X", "name": "USD / CAD"},
+        {"symbol": "NZDUSD=X", "name": "NZD / USD"},
+        {"symbol": "EURGBP=X", "name": "EUR / GBP"},
+        {"symbol": "EURJPY=X", "name": "EUR / JPY"},
+        {"symbol": "GBPJPY=X", "name": "GBP / JPY"}
+    ],
+    "commodities": [
+        {"symbol": "GC=F", "name": "Or (Gold)"},
+        {"symbol": "SI=F", "name": "Argent (Silver)"},
+        {"symbol": "CL=F", "name": "Pétrole Brut WTI"},
+        {"symbol": "BZ=F", "name": "Pétrole Brent"},
+        {"symbol": "HG=F", "name": "Cuivre (Copper)"},
+        {"symbol": "NG=F", "name": "Gaz Naturel"},
+        {"symbol": "PL=F", "name": "Platine (Platinum)"}
+    ],
+    "indices": [
+        {"symbol": "^GSPC", "name": "S&P 500 (US)"},
+        {"symbol": "^IXIC", "name": "Nasdaq Composite"},
+        {"symbol": "^DJI", "name": "Dow Jones 30"},
+        {"symbol": "^FCHI", "name": "CAC 40 (France)"},
+        {"symbol": "^GDAXI", "name": "DAX 40 (Allemagne)"},
+        {"symbol": "^N225", "name": "Nikkei 225 (Japon)"},
+        {"symbol": "^FTSE", "name": "FTSE 100 (Londres)"}
+    ],
+    "etf": [
+        {"symbol": "SPY", "name": "SPDR S&P 500 ETF"},
+        {"symbol": "QQQ", "name": "Invesco QQQ (Nasdaq 100)"},
+        {"symbol": "SMH", "name": "VanEck Semiconductor ETF"},
+        {"symbol": "GLD", "name": "SPDR Gold Shares"},
+        {"symbol": "SLV", "name": "iShares Silver Trust"},
+        {"symbol": "TLT", "name": "iShares 20+ Year Treasury"},
+        {"symbol": "IWM", "name": "iShares Russell 2000"},
+        {"symbol": "ARKK", "name": "ARK Innovation ETF"},
+        {"symbol": "SOXX", "name": "iShares Semiconductor ETF"}
+    ]
+}
 
 class UnifiedMarketProvider:
     @staticmethod
@@ -48,14 +139,12 @@ class UnifiedMarketProvider:
             prev_close = float(df['Close'].iloc[-2])
             change_pct = ((last_close - prev_close) / prev_close) * 100
 
-            # Récupération du Market Cap ultra-rapide via fast_info
             mcap = None
             try:
                 mcap = ticker.fast_info.market_cap
             except Exception:
                 mcap = None
 
-            # Volume en valeur sur la semaine
             vol_val = float(df['Volume'].iloc[-1]) * last_close if 'Volume' in df.columns else 0
 
             return {
