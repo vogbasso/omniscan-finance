@@ -18,18 +18,6 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Injection de style CSS personnalisé
-st.markdown("""
-<style>
-    .metric-card {
-        background-color: #1e222d;
-        border-radius: 8px;
-        padding: 15px;
-        border-left: 4px solid #2962ff;
-    }
-</style>
-""", unsafe_allow_html=True)
-
 def load_locale(lang: str = "fr"):
     with open(f"config/locales/{lang}.json", "r", encoding="utf-8") as f:
         return json.load(f)
@@ -141,7 +129,7 @@ if custom_search:
         fig_c.update_layout(title=f"Graphique Hebdomadaire (5/20/80) — {custom_search}", template="plotly_dark", height=430, xaxis_rangeslider_visible=False)
         st.plotly_chart(fig_c, use_container_width=True)
 
-# 🎯 RADAR D'ENTRÉE EN POSITION
+# RADAR D'ENTRÉE EN POSITION
 if results:
     opportunities = [r for r in results if r.get("is_entry_zone")]
     
@@ -202,35 +190,30 @@ if results:
 
     df_display = pd.DataFrame(table_data)
 
-    # Fonctions de style néon
     def style_change_column(val):
         if "▲" in str(val):
-            return 'background-color: rgba(0, 230, 118, 0.18); color: #00e676; font-weight: bold; border-radius: 4px;'
+            return "background-color: rgba(0, 230, 118, 0.18); color: #00e676; font-weight: bold; border-radius: 4px;"
         elif "▼" in str(val):
-            return 'background-color: rgba(255, 82, 82, 0.18); color: #ff5252; font-weight: bold; border-radius: 4px;'
-        return 'color: #9e9e9e;'
+            return "background-color: rgba(255, 82, 82, 0.18); color: #ff5252; font-weight: bold; border-radius: 4px;"
+        return "color: #9e9e9e;"
 
     def style_regime_column(val):
         if "ACHETEUR" in str(val) or "BULLISH" in str(val):
-            return 'background-color: rgba(0, 230, 118, 0.12); color: #00e676; font-weight: 600;'
+            return "background-color: rgba(0, 230, 118, 0.12); color: #00e676; font-weight: 600;"
         elif "VENDEUR" in str(val) or "BEARISH" in str(val):
-            return 'background-color: rgba(255, 82, 82, 0.12); color: #ff5252; font-weight: 600;'
-        return ''
+            return "background-color: rgba(255, 82, 82, 0.12); color: #ff5252; font-weight: 600;"
+        return ""
 
-    # Application du styler multi-version Pandas
     styler = df_display.style
-    mapper = getattr(styler, "map", getattr(styler, "applymap", None))
-    
-    if hasattr(styler, "map"):
+    try:
         styled_df = styler.map(style_change_column, subset=[t["col_change"]]).map(style_regime_column, subset=[t["col_regime"]])
         st.dataframe(styled_df, use_container_width=True, height=450)
-    elif hasattr(styler, "applymap"):
-        styled_df = styler.applymap(style_change_column, subset=[t["col_change"]]).applymap(style_regime_column, subset=[t["col_regime"]])
-        st.dataframe(styled_df, use_container_width=True, height=450)
-    else:
-        st.dataframe(df_display, use_container_width=True, height=450)
-    else:
-        st.dataframe(df_display, use_container_width=True, height=450)
+    except Exception:
+        try:
+            styled_df = styler.applymap(style_change_column, subset=[t["col_change"]]).applymap(style_regime_column, subset=[t["col_regime"]])
+            st.dataframe(styled_df, use_container_width=True, height=450)
+        except Exception:
+            st.dataframe(df_display, use_container_width=True, height=450)
 
     # Inspecteur graphique
     st.markdown("---")
