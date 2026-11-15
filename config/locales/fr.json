@@ -26,5 +26,7 @@
   "state_consolidation": "⏳ Consolidation",
   "col_change": "Var. Hebdo (%)",
   "col_volume": "Volume",
-  "col_marketcap": "Capitalisation"
+  "col_marketcap": "Capitalisation",
+  "col_ath": "Prix ATH ($)",
+  "col_dist_ath": "Distance ATH (%)"
 }

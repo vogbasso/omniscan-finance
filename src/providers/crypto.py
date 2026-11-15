@@ -17,20 +17,24 @@ def fmt_currency(val: float) -> str:
         return f"${val/1e3:.2f}k"
     return f"${val:.2f}"
 
-# Cache des capitalisations cryptos
-_CRYPTO_CAP_CACHE = {}
+_CRYPTO_META_CACHE = {}
 
-def get_crypto_market_caps():
-    global _CRYPTO_CAP_CACHE
-    if not _CRYPTO_CAP_CACHE:
+def get_crypto_metadata():
+    global _CRYPTO_META_CACHE
+    if not _CRYPTO_META_CACHE:
         try:
-            url = "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=100&page=1"
-            resp = requests.get(url, timeout=5).json()
+            url = "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=150&page=1"
+            resp = requests.get(url, timeout=6).json()
             for c in resp:
-                _CRYPTO_CAP_CACHE[c['symbol'].upper()] = c.get('market_cap', 0)
+                sym = c['symbol'].upper()
+                _CRYPTO_META_CACHE[sym] = {
+                    "market_cap": c.get('market_cap', 0),
+                    "ath": c.get('ath', 0),
+                    "ath_change_percentage": c.get('ath_change_percentage', 0)
+                }
         except Exception:
             pass
-    return _CRYPTO_CAP_CACHE
+    return _CRYPTO_META_CACHE
 
 class BinanceCryptoProvider:
     def __init__(self):
@@ -80,14 +84,21 @@ class BinanceCryptoProvider:
             change_pct = ((last_close - prev_close) / prev_close) * 100
             last_vol_usd = float(df['volume'].iloc[-1]) * last_close
 
-            # Recherche de la Capitalisation via CoinGecko
+            # Métadonnées CoinGecko (Cap, ATH, Dist ATH)
             base_coin = symbol.split('/')[0].upper()
-            caps = get_crypto_market_caps()
-            cap_val = caps.get(base_coin, 0)
+            meta = get_crypto_metadata().get(base_coin, {})
+            cap_val = meta.get("market_cap", 0)
+            ath_price = meta.get("ath", 0)
+            
+            if ath_price and ath_price > 0:
+                dist_ath_pct = ((last_close - ath_price) / ath_price) * 100
+            else:
+                ath_price = float(df['High'].max())
+                dist_ath_pct = ((last_close - ath_price) / ath_price) * 100
 
-            # Détection d'opportunité d'entrée (Pullback sur MM20)
+            # Détection d'opportunité d'entrée
             ma20 = float(df['ma20'].iloc[-1])
-            dist_ma20 = abs(last_close - ma20) / ma20
+            dist_ma20 = abs(last_close - ma20) / ma20 if ma20 else 1.0
             is_entry_zone = False
             entry_type = ""
             
@@ -104,6 +115,8 @@ class BinanceCryptoProvider:
                 "change_pct": round(change_pct, 2),
                 "volume": fmt_currency(last_vol_usd),
                 "market_cap": fmt_currency(cap_val) if cap_val else "N/A",
+                "ath_price": round(float(ath_price), 4),
+                "dist_ath_pct": round(float(dist_ath_pct), 2),
                 "regime": regime,
                 "state": state,
                 "is_entry_zone": is_entry_zone,

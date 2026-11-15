@@ -26,5 +26,7 @@
   "state_consolidation": "⏳ Consolidation",
   "col_change": "Weekly Chg (%)",
   "col_volume": "Volume",
-  "col_marketcap": "Market Cap"
+  "col_marketcap": "Market Cap",
+  "col_ath": "ATH Price ($)",
+  "col_dist_ath": "ATH Dist. (%)"
 }

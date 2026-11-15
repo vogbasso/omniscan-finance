@@ -139,6 +139,17 @@ class UnifiedMarketProvider:
             prev_close = float(df['Close'].iloc[-2])
             change_pct = ((last_close - prev_close) / prev_close) * 100
 
+            # Calcul de l'ATH sur données historiques
+            try:
+                hist_max = ticker.history(period="max", interval="1mo")
+                ath_price = float(hist_max['High'].max()) if not hist_max.empty else float(df['High'].max())
+            except Exception:
+                ath_price = float(df['High'].max())
+
+            ath_price = max(ath_price, float(df['High'].max()))
+            dist_ath_pct = ((last_close - ath_price) / ath_price) * 100 if ath_price > 0 else 0.0
+
+            # Market Cap
             mcap = None
             try:
                 mcap = ticker.fast_info.market_cap
@@ -163,13 +174,15 @@ class UnifiedMarketProvider:
             return {
                 "symbol": symbol,
                 "price": round(last_close, 4 if "USD" in symbol or "=X" in symbol else 2),
-                "is_entry_zone": is_entry_zone,
-                "entry_type": entry_type,
                 "change_pct": round(change_pct, 2),
                 "volume": fmt_currency(vol_val),
                 "market_cap": fmt_currency(mcap) if mcap else "N/A",
+                "ath_price": round(ath_price, 2),
+                "dist_ath_pct": round(dist_ath_pct, 2),
                 "regime": regime,
                 "state": state,
+                "is_entry_zone": is_entry_zone,
+                "entry_type": entry_type,
                 "df": df
             }
         except Exception:

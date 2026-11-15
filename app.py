@@ -110,13 +110,14 @@ if custom_search:
             custom_data["name"] = custom_search
 
     if custom_data and custom_df is not None:
-        c1, c2, c3, c4, c5 = st.columns(5)
+        c1, c2, c3, c4, c5, c6 = st.columns(6)
         c1.metric("Prix Actuel", f"${custom_data['price']}")
         chg = custom_data['change_pct']
-        c2.metric("Var. Hebdo", f"{'▲ +' if chg > 0 else '▼ '}{chg}%", delta=f"{chg}%")
-        c3.metric("Volume Hebdo", custom_data['volume'])
-        c4.metric("Capitalisation", custom_data['market_cap'])
-        c5.metric("Tendance de Fond", t.get(custom_data['regime'], custom_data['regime']))
+        c2.metric("Var. Hebdo", f"{'▲ +' if chg > 0 else '▼ '}{chg}%")
+        c3.metric("Record ATH", f"${custom_data.get('ath_price', 'N/A')}")
+        c4.metric("Distance ATH", f"{custom_data.get('dist_ath_pct', 0)}%")
+        c5.metric("Capitalisation", custom_data['market_cap'])
+        c6.metric("Tendance Fond", t.get(custom_data['regime'], custom_data['regime']))
 
         fig_c = go.Figure()
         fig_c.add_trace(go.Candlestick(
@@ -129,7 +130,7 @@ if custom_search:
         fig_c.update_layout(title=f"Graphique Hebdomadaire (5/20/80) — {custom_search}", template="plotly_dark", height=430, xaxis_rangeslider_visible=False)
         st.plotly_chart(fig_c, use_container_width=True)
 
-# RADAR D'ENTRÉE EN POSITION
+# 🎯 RADAR D'ENTRÉE EN POSITION
 if results:
     opportunities = [r for r in results if r.get("is_entry_zone")]
     
@@ -144,7 +145,7 @@ if results:
                 st.markdown(f"#### **{opp['name']}** ({opp['symbol']})")
                 st.write(f"**Prix** : `${opp['price']}`")
                 st.write(f"**Signal** : `{opp['entry_type']}`")
-                st.write(f"**Volume** : {opp['volume']}")
+                st.write(f"**Distance ATH** : `{opp.get('dist_ath_pct', 0)}%`")
     else:
         st.info("ℹ️ Aucun actif en zone de pullback immédiate sur cette sélection.")
 
@@ -159,7 +160,7 @@ if results:
     k3.metric("🔴 Régime Vendeur", f"{bear_count} ({round(bear_count/len(results)*100)}%)")
     k4.metric("🚀 Tendances Fortes", strong_bull)
 
-    # TABLEAU STYLISÉ
+    # TABLEAU STYLISÉ AVEC ATH ET DISTANCE ATH
     st.markdown("---")
     st.subheader("📋 " + ("Résultats Détaillés du Marché" if lang_code == "fr" else "Detailed Market Results"))
     search_f = st.text_input("🔎 Filtrer dans la liste :" if lang_code == "fr" else "Quick filter:", "").strip().upper()
@@ -176,12 +177,18 @@ if results:
         else:
             chg_str = "  0.00%"
             
+        ath_p = f"${r.get('ath_price', 'N/A')}"
+        d_ath = r.get('dist_ath_pct', 0.0)
+        d_ath_str = f"🔥 {d_ath:.1f}%" if d_ath >= -3.0 else f"{d_ath:.1f}%"
+
         statut_opp = r.get("entry_type", "") if r.get("is_entry_zone") else t.get(r["state"], r["state"])
         table_data.append({
             t["col_symbol"]: r["symbol"],
             t["col_name"]: r.get("name", r["symbol"]),
             t["col_price"]: f"${r['price']}",
             t["col_change"]: chg_str,
+            t["col_ath"]: ath_p,
+            t["col_dist_ath"]: d_ath_str,
             t["col_volume"]: r["volume"],
             t["col_marketcap"]: r["market_cap"],
             t["col_regime"]: t.get(r["regime"], r["regime"]),
@@ -204,13 +211,22 @@ if results:
             return "background-color: rgba(255, 82, 82, 0.12); color: #ff5252; font-weight: 600;"
         return ""
 
+    def style_dist_ath(val):
+        if "🔥" in str(val):
+            return "background-color: rgba(255, 171, 0, 0.2); color: #ffab00; font-weight: bold;"
+        return ""
+
     styler = df_display.style
     try:
-        styled_df = styler.map(style_change_column, subset=[t["col_change"]]).map(style_regime_column, subset=[t["col_regime"]])
+        styled_df = styler.map(style_change_column, subset=[t["col_change"]])\
+                          .map(style_regime_column, subset=[t["col_regime"]])\
+                          .map(style_dist_ath, subset=[t["col_dist_ath"]])
         st.dataframe(styled_df, use_container_width=True, height=450)
     except Exception:
         try:
-            styled_df = styler.applymap(style_change_column, subset=[t["col_change"]]).applymap(style_regime_column, subset=[t["col_regime"]])
+            styled_df = styler.applymap(style_change_column, subset=[t["col_change"]])\
+                              .applymap(style_regime_column, subset=[t["col_regime"]])\
+                              .applymap(style_dist_ath, subset=[t["col_dist_ath"]])
             st.dataframe(styled_df, use_container_width=True, height=450)
         except Exception:
             st.dataframe(df_display, use_container_width=True, height=450)
