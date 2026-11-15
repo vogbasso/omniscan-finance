@@ -33,7 +33,7 @@ class TechnicalIndicators:
 
     @staticmethod
     def calculate_paolo_bbw_compression(df: pd.DataFrame, period: int = 80, dev: float = 2.0, lookback: int = 52) -> Dict[str, Any]:
-        close = df['Close']
+        close = df['Close'] if 'Close' in df.columns else df['close']
         middle = df['ma80'] if 'ma80' in df.columns else close.ewm(span=period, adjust=False).mean()
         rolling_std = close.rolling(window=period, min_periods=25).std().fillna(close.std())
         upper = middle + (dev * rolling_std)
@@ -63,9 +63,10 @@ class TechnicalIndicators:
         regime = "regime_bull" if df['ma20'].iloc[0] > df['ma80'].iloc[0] else "regime_bear"
         is_fresh_signal = False
         last_signal = None
+        close_col = df['Close'] if 'Close' in df.columns else df['close']
 
         for i in range(len(df)):
-            p = float(df['close'].iloc[i])
+            p = float(close_col.iloc[i])
             m5 = float(df['ma5'].iloc[i])
             m20 = float(df['ma20'].iloc[i])
             m80 = float(df['ma80'].iloc[i])
@@ -87,7 +88,7 @@ class TechnicalIndicators:
         if is_fresh_signal and last_signal:
             return regime, last_signal
 
-        last_p = float(df['close'].iloc[-1])
+        last_p = float(close_col.iloc[-1])
         last_m5 = float(df['ma5'].iloc[-1])
         last_m20 = float(df['ma20'].iloc[-1])
         last_m80 = float(df['ma80'].iloc[-1])
@@ -107,12 +108,6 @@ class TechnicalIndicators:
 
     @staticmethod
     def evaluate_rsi21_polarity_strategy(df: pd.DataFrame) -> Dict[str, Any]:
-        """
-        STRATÉGIE RSI 21 (PAOLO BASSO) - MÉMOIRE PURE DES 2 ZONES EXTRÊMES :
-        - Toucher >= 70 active la polarité ACHETEUSE (et le reste tant que <= 30 n'est pas touché)
-        - Toucher <= 30 active la polarité VENDEUSE (et le reste tant que >= 70 n'est pas touché)
-        """
-        # Détermination de la polarité initiale basée sur le premier extrême rencontré
         polarity = "POLARITY_BEAR"
         for r in df['rsi21']:
             if r >= 70:
@@ -126,7 +121,6 @@ class TechnicalIndicators:
         current_pullback_lowest = None
         pullback_in_progress = False
         returned_to_overbought = False
-
         structural_lows_history: List[float] = []
 
         trade_count = 0
@@ -134,21 +128,20 @@ class TechnicalIndicators:
         active_trade = None
         trade_signals_history = []
 
+        close_col = df['Close'] if 'Close' in df.columns else df['close']
+        low_col = df['Low'] if 'Low' in df.columns else df['low']
+
         n = len(df)
         for i in range(n):
             rsi = float(df['rsi21'].iloc[i])
-            low = float(df['Low'].iloc[i])
-            close = float(df['Close'].iloc[i])
+            low = float(low_col.iloc[i])
+            close = float(close_col.iloc[i])
             m5 = float(df['ma5'].iloc[i])
             m20 = float(df['ma20'].iloc[i])
             prev_m5 = float(df['ma5'].iloc[i-1]) if i > 0 else m5
             prev_m20 = float(df['ma20'].iloc[i-1]) if i > 0 else m20
 
-            # ----------------------------------------------------
-            # 1. BASCULATEUR PUR DE POLARITÉ (30 <-> 70)
-            # ----------------------------------------------------
             if rsi <= 30:
-                # Tout contact avec <= 30 bascule impérativement en VENDEUSE
                 polarity = "POLARITY_BEAR"
                 trade_count = 0
                 pullback_in_progress = False
@@ -157,17 +150,12 @@ class TechnicalIndicators:
                 oversold_lowest_low = low if oversold_lowest_low is None else min(oversold_lowest_low, low)
 
             elif rsi >= 70:
-                # Tout contact avec >= 70 bascule impérativement en ACHETEUSE
                 polarity = "POLARITY_BULL"
                 returned_to_overbought = True
                 if oversold_lowest_low is not None and not structural_lows_history:
                     structural_lows_history = [oversold_lowest_low]
 
-            # ----------------------------------------------------
-            # 2. ENTRÉES EN POLARITÉ ACHETEUSE
-            # ----------------------------------------------------
             if polarity == "POLARITY_BULL":
-                # Pullback sous 50
                 if returned_to_overbought and rsi < 50:
                     if not pullback_in_progress:
                         pullback_in_progress = True
@@ -175,7 +163,6 @@ class TechnicalIndicators:
                     else:
                         current_pullback_lowest = min(current_pullback_lowest, low)
 
-                # Croisement MM5 > MM20
                 is_crossover = (prev_m5 <= prev_m20 and m5 > m20)
                 if pullback_in_progress and is_crossover:
                     trade_count += 1
@@ -190,11 +177,9 @@ class TechnicalIndicators:
                             if past_low < entry_price:
                                 sl = past_low
                                 break
-                        
                         if sl is None:
                             sl = current_pullback_lowest if (current_pullback_lowest and current_pullback_lowest < entry_price) else (low * 0.97)
-
-                        t_type = f"T{trade_count} (SL Adaptatif Sécurisé)"
+                        t_type = f"T{trade_count} (SL Adaptatif)"
 
                     risk = entry_price - sl
                     tp1 = entry_price + risk if risk > 0 else entry_price * 1.05
@@ -226,7 +211,6 @@ class TechnicalIndicators:
                     if i == n - 1:
                         last_signal_event = "signal_buy_fresh"
 
-        # Diagnostic temps réel
         last_rsi = float(df['rsi21'].iloc[-1])
         if last_signal_event == "signal_buy_fresh" and active_trade:
             state = "STATE_FRESH_BUY"
