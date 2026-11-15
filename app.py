@@ -282,6 +282,12 @@ if results:
     trade_signals = active_asset.get("trade_signals_history", []) if active_asset else []
 
     if df_chart is not None and not df_chart.empty:
+        if 'ma320' not in df_chart.columns:
+            df_chart['ma320'] = TechnicalIndicators.calculate_ema(df_chart['Close'], span=320)
+        if 'ma20' not in df_chart.columns:
+            df_chart['ma20'] = TechnicalIndicators.calculate_ema(df_chart['Close'], span=20)
+        if 'ma5' not in df_chart.columns:
+            df_chart['ma5'] = TechnicalIndicators.calculate_ema(df_chart['Close'], span=5)
         fig = make_subplots(
             rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.03,
             row_heights=[0.55, 0.23, 0.22],
@@ -296,7 +302,7 @@ if results:
         fig.add_trace(go.Candlestick(x=df_chart.index, open=df_chart['Open'], high=df_chart['High'], low=df_chart['Low'], close=df_chart['Close'], name="Prix"), row=1, col=1)
         fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['ma5'], line=dict(color='#00d4ff', width=1.5), name='MM5'), row=1, col=1)
         fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['ma20'], line=dict(color='#ffaa00', width=2), name='MM20'), row=1, col=1)
-        fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['ma80'], line=dict(color='#d000ff', width=2.5), name='MM320'), row=1, col=1)
+        fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['ma320'], line=dict(color='#d000ff', width=2.5), name='MM320'), row=1, col=1)
 
         # 2. MARQUAGE DES SIGNAUX D'ENTRÉE SUR LE GRAPHIQUE (▲ Vert Fluo)
         if trade_signals:
