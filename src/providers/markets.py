@@ -54,12 +54,17 @@ MARKET_CATALOG = {
         {"symbol": "PL=F", "name": "Platine (Platinum)"}
     ],
     "indices": [
+        {"symbol": "URTH", "name": "MSCI World Index (Monde)"},
+        {"symbol": "ACWI", "name": "MSCI ACWI (Monde + Émergents)"},
         {"symbol": "^GSPC", "name": "S&P 500 (US)"}, {"symbol": "^IXIC", "name": "Nasdaq Composite"},
         {"symbol": "^DJI", "name": "Dow Jones 30"}, {"symbol": "^FCHI", "name": "CAC 40 (France)"},
         {"symbol": "^GDAXI", "name": "DAX 40 (Allemagne)"}, {"symbol": "^N225", "name": "Nikkei 225 (Japon)"},
         {"symbol": "^FTSE", "name": "FTSE 100 (Londres)"}
     ],
     "etf": [
+        {"symbol": "URTH", "name": "iShares MSCI World ETF"},
+        {"symbol": "ACWI", "name": "iShares MSCI ACWI ETF"},
+        {"symbol": "VT", "name": "Vanguard Total World Stock"},
         {"symbol": "SPY", "name": "SPDR S&P 500 ETF"}, {"symbol": "QQQ", "name": "Invesco QQQ (Nasdaq)"},
         {"symbol": "SMH", "name": "VanEck Semiconductor ETF"}, {"symbol": "GLD", "name": "SPDR Gold Shares"},
         {"symbol": "SLV", "name": "iShares Silver Trust"}, {"symbol": "TLT", "name": "iShares 20+ Year Treasury"},
