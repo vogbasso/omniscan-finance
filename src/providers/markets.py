@@ -26,14 +26,11 @@ def fmt_currency(val: float) -> str:
 
 MARKET_CATALOG = {
     "retirement": [
-        {"symbol": "URTH", "name": "MSCI World (Monde)"},
-        {"symbol": "SPY", "name": "S&P 500 (US LargeCap)"},
-        {"symbol": "IJH", "name": "S&P 400 (US MidCap)"},
-        {"symbol": "GLD", "name": "Or Physique (Gold)"},
-        {"symbol": "BITW", "name": "Crypto Top 10 Index (Bitwise)"},
-        {"symbol": "BTC-USD", "name": "Bitcoin (Réserve Digitale)"},
-        {"symbol": "ETH-USD", "name": "Ethereum (Smart Contracts)"},
-        {"symbol": "VT", "name": "Vanguard Total World (Global)"}
+        {"symbol": "BITW", "name": "Indice Crypto Top 10 (Bitwise Index)"},
+        {"symbol": "URTH", "name": "Indice MSCI World (Actions Monde)"},
+        {"symbol": "SPY", "name": "Indice S&P 500 (Grandes Valeurs US)"},
+        {"symbol": "IJH", "name": "Indice S&P 400 (Moyennes Valeurs US MidCap)"},
+        {"symbol": "GLD", "name": "Or Physique (Seul Actif Tangible - Gold)"}
     ],
     "stocks": [
         {"symbol": "NVDA", "name": "Nvidia"}, {"symbol": "AAPL", "name": "Apple"},
