@@ -35,8 +35,8 @@ st.sidebar.markdown("---")
 st.sidebar.subheader("⚙️ " + ("Configuration du Grand Scan" if lang_code == "fr" else "Master Scan Settings"))
 
 market_options = {
-    "stocks": t["menu_stocks"],
     "crypto": t["menu_crypto"],
+    "stocks": t["menu_stocks"],
     "forex": t["menu_forex"],
     "commodities": t["menu_commodities"],
     "indices": t["menu_indices"],
