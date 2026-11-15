@@ -34,5 +34,9 @@
   "rsi_oversold": "🟢 Survente (≤30)",
   "rsi_neutral": "⚪ Neutre (45-55)",
   "rsi_bullish": "↗️ Haussier (55-70)",
-  "rsi_bearish": "↘️ Baissier (30-45)"
+  "rsi_bearish": "↘️ Baissier (30-45)",
+  "col_bbw": "Paolo BBW (80)",
+  "bbw_squeeze": "⚡ Squeeze (Compression)",
+  "bbw_expansion": "💥 Expansion",
+  "bbw_normal": "⚪ Normal"
 }

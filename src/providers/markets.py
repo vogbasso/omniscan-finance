@@ -137,6 +137,9 @@ class UnifiedMarketProvider:
             df['ma20'] = TechnicalIndicators.calculate_ema(df['Close'], span=20)
             df['ma80'] = TechnicalIndicators.calculate_ema(df['Close'], span=80)
             df['rsi21'] = TechnicalIndicators.calculate_rsi(df['Close'], period=21)
+            bbw_res = TechnicalIndicators.calculate_paolo_bbw_compression(df, period=80, dev=2.0, lookback=52)
+            df['bbw'] = bbw_res['bbw_series']
+            df['bbw_min'] = bbw_res['min_lookback_series']
             df['close'] = df['Close']
 
             regime, state = TechnicalIndicators.evaluate_regime_and_state(df)
@@ -185,6 +188,10 @@ class UnifiedMarketProvider:
                 "ath_price": round(ath_price, 2),
                 "rsi": round(float(df['rsi21'].iloc[-1]), 1),
                 "rsi_zone": TechnicalIndicators.evaluate_rsi_zone(float(df['rsi21'].iloc[-1])),
+                "bbw": bbw_res['current_bbw'],
+                "bbw_min": bbw_res['min_bbw'],
+                "bbw_squeeze": bbw_res['is_squeeze'],
+                "bbw_status": bbw_res['status'],
                 "dist_ath_pct": round(dist_ath_pct, 2),
                 "regime": regime,
                 "state": state,

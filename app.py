@@ -11,9 +11,10 @@ import json
 
 from src.providers.crypto import BinanceCryptoProvider
 from src.providers.markets import UnifiedMarketProvider
+from src.core.indicators import TechnicalIndicators
 
 st.set_page_config(
-    page_title="OmniScan Finance - Grand Scan 5/20/80 & RSI 21",
+    page_title="OmniScan Finance - Grand Scan 5/20/80 & Paolo BBW",
     page_icon="📈",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -115,41 +116,43 @@ if custom_search:
         chg = custom_data['change_pct']
         c2.metric("Var. Hebdo", f"{'▲ +' if chg > 0 else '▼ '}{chg}%")
         c3.metric("RSI (21)", f"{custom_data.get('rsi', 50.0)}")
-        c4.metric("Distance ATH", f"{custom_data.get('dist_ath_pct', 0)}%")
-        c5.metric("Capitalisation", custom_data['market_cap'])
+        c4.metric("Paolo BBW (80)", f"{custom_data.get('bbw', 0)}%")
+        c5.metric("Distance ATH", f"{custom_data.get('dist_ath_pct', 0)}%")
         c6.metric("Tendance Fond", t.get(custom_data['regime'], custom_data['regime']))
 
 # RADAR D'ENTRÉE EN POSITION
 if results:
-    opportunities = [r for r in results if r.get("is_entry_zone")]
+    opportunities = [r for r in results if r.get("is_entry_zone") or r.get("bbw_squeeze")]
     
     st.markdown("---")
-    st.subheader("🎯 " + ("RADAR SNIPER : ACTIFS À SURVEILLER POUR ENTRER EN POSITION" if lang_code == "fr" else "SNIPER RADAR : ASSETS READY FOR ENTRY"))
+    st.subheader("🎯 " + ("RADAR SNIPER : ACTIFS À SURVEILLER (TIMING & SQUEEZE)" if lang_code == "fr" else "SNIPER RADAR : TIMING & SQUEEZE SETUPS"))
     
     if opportunities:
-        st.success(f"🔥 {len(opportunities)} opportunité(s) de timing détectée(s) !")
+        st.success(f"🔥 {len(opportunities)} configuration(s) de timing / compression détectée(s) !")
         cols = st.columns(min(len(opportunities), 4))
         for idx, opp in enumerate(opportunities[:4]):
             with cols[idx]:
                 st.markdown(f"#### **{opp['name']}** ({opp['symbol']})")
                 st.write(f"**Prix** : `${opp['price']}`")
-                st.write(f"**Signal** : `{opp['entry_type']}`")
-                st.write(f"**RSI (21)** : `{opp.get('rsi', 50.0)}` — {t.get(opp.get('rsi_zone', ''), '')}")
+                st.write(f"**Timing MM** : `{opp.get('entry_type', opp.get('state'))}`")
+                bbw_badge = "⚡ SQUEEZE ACTIF" if opp.get('bbw_squeeze') else f"{opp.get('bbw', 0)}%"
+                st.write(f"**Paolo BBW (80)** : `{bbw_badge}`")
     else:
-        st.info("ℹ️ Aucun actif en zone de pullback immédiate sur cette sélection.")
+        st.info("ℹ️ Aucun actif en zone de pullback ou squeeze immédiat sur cette sélection.")
 
     st.markdown("---")
     bull_count = sum(1 for r in results if r["regime"] == "regime_bull")
     bear_count = sum(1 for r in results if r["regime"] == "regime_bear")
     strong_bull = sum(1 for r in results if r["state"] == "state_strong_bull")
+    squeeze_count = sum(1 for r in results if r.get("bbw_squeeze"))
 
     k1, k2, k3, k4 = st.columns(4)
     k1.metric("Actifs Scannés", len(results))
     k2.metric("🟢 Régime Acheteur", f"{bull_count} ({round(bull_count/len(results)*100)}%)")
     k3.metric("🔴 Régime Vendeur", f"{bear_count} ({round(bear_count/len(results)*100)}%)")
-    k4.metric("🚀 Tendances Fortes", strong_bull)
+    k4.metric("⚡ Squeeze Paolo BBW", squeeze_count)
 
-    # TABLEAU STYLISÉ AVEC RSI 21
+    # TABLEAU STYLISÉ
     st.markdown("---")
     st.subheader("📋 " + ("Résultats Détaillés du Marché" if lang_code == "fr" else "Detailed Market Results"))
     search_f = st.text_input("🔎 Filtrer dans la liste :" if lang_code == "fr" else "Quick filter:", "").strip().upper()
@@ -168,12 +171,18 @@ if results:
         rsi_zone_label = t.get(r.get("rsi_zone", "rsi_neutral"), "")
         rsi_display = f"{rsi_val} | {rsi_zone_label}"
 
+        # Affichage Paolo BBW
+        bbw_val = r.get("bbw", 0.0)
+        is_sq = r.get("bbw_squeeze", False)
+        bbw_str = f"⚡ {bbw_val:.1f}% (Squeeze)" if is_sq else f"{bbw_val:.1f}%"
+
         statut_opp = r.get("entry_type", "") if r.get("is_entry_zone") else t.get(r["state"], r["state"])
         table_data.append({
             t["col_symbol"]: r["symbol"],
             t["col_name"]: r.get("name", r["symbol"]),
             t["col_price"]: f"${r['price']}",
             t["col_change"]: chg_str,
+            t["col_bbw"]: bbw_str,
             t["col_rsi"]: rsi_display,
             t["col_ath"]: ath_p,
             t["col_dist_ath"]: d_ath_str,
@@ -204,15 +213,9 @@ if results:
             return "background-color: rgba(255, 171, 0, 0.2); color: #ffab00; font-weight: bold;"
         return ""
 
-    def style_rsi_column(val):
-        if "Surachat" in str(val) or "Overbought" in str(val):
-            return "color: #ff5252; font-weight: bold;"
-        elif "Survente" in str(val) or "Oversold" in str(val):
-            return "color: #00e676; font-weight: bold;"
-        elif "Neutre" in str(val) or "Neutral" in str(val):
-            return "color: #b0bec5;"
-        elif "Haussier" in str(val) or "Bullish" in str(val):
-            return "color: #40c4ff; font-weight: 600;"
+    def style_bbw(val):
+        if "⚡" in str(val):
+            return "background-color: rgba(30, 144, 255, 0.25); color: #1e90ff; font-weight: bold; border-left: 3px solid #1e90ff;"
         return ""
 
     styler = df_display.style
@@ -220,22 +223,25 @@ if results:
         styled_df = styler.map(style_change_column, subset=[t["col_change"]])\
                           .map(style_regime_column, subset=[t["col_regime"]])\
                           .map(style_dist_ath, subset=[t["col_dist_ath"]])\
-                          .map(style_rsi_column, subset=[t["col_rsi"]])
+                          .map(style_bbw, subset=[t["col_bbw"]])
         st.dataframe(styled_df, use_container_width=True, height=450)
     except Exception:
         st.dataframe(df_display, use_container_width=True, height=450)
 
-    # Inspecteur graphique avec sous-panneau RSI (21)
+    # Inspecteur graphique à 3 étages (Prix MM, RSI 21, Paolo BBW MQL5)
     st.markdown("---")
-    st.subheader("📈 " + ("Inspecteur Technique Candlestick & RSI (21)" if lang_code == "fr" else "Technical Candlestick & RSI (21) Inspector"))
+    st.subheader("📈 " + ("Inspecteur Technique : Chandeliers + RSI 21 + Paolo BBW MQL5" if lang_code == "fr" else "Technical Inspector: Candlestick + RSI 21 + Paolo BBW MQL5"))
     selected_sym = st.selectbox("Sélectionnez un actif à afficher :" if lang_code == "fr" else "Select asset to inspect:", [r["symbol"] for r in results])
     df_chart = charts_cache.get(selected_sym)
 
     if df_chart is not None and not df_chart.empty:
-        # Graphique à 2 panneaux (Prix en haut, RSI 21 en bas)
-        fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.04, row_heights=[0.72, 0.28])
+        fig = make_subplots(
+            rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.03,
+            row_heights=[0.55, 0.22, 0.23],
+            subplot_titles=(f"Chandeliers & MM (5 / 20 / 80) — {selected_sym}", "RSI (21)", "Paolo BBW % (Bandes 80) & Seuil Compression (Min Lookback)")
+        )
 
-        # Panneau 1 : Candlesticks & MM 5, 20, 80
+        # 1. Chandeliers & MM
         fig.add_trace(go.Candlestick(
             x=df_chart.index, open=df_chart['Open'], high=df_chart['High'],
             low=df_chart['Low'], close=df_chart['Close'], name="Prix"
@@ -244,23 +250,31 @@ if results:
         fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['ma20'], line=dict(color='#ffaa00', width=2), name='MM20'), row=1, col=1)
         fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['ma80'], line=dict(color='#d000ff', width=2.5), name='MM80'), row=1, col=1)
 
-        # Panneau 2 : Oscillateur RSI (21)
+        # 2. RSI (21)
         if 'rsi21' not in df_chart.columns:
-            from src.core.indicators import TechnicalIndicators
             df_chart['rsi21'] = TechnicalIndicators.calculate_rsi(df_chart['Close'], period=21)
-
-        fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['rsi21'], line=dict(color='#ffd600', width=2), name='RSI (21)'), row=2, col=1)
-        
-        # Lignes repères RSI (70, 55, 45, 30)
+        fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['rsi21'], line=dict(color='#ffd600', width=2), name='RSI 21'), row=2, col=1)
         fig.add_hline(y=70, line_dash="dash", line_color="#ff5252", row=2, col=1)
         fig.add_hline(y=55, line_dash="dot", line_color="#40c4ff", row=2, col=1)
         fig.add_hline(y=45, line_dash="dot", line_color="#9e9e9e", row=2, col=1)
         fig.add_hline(y=30, line_dash="dash", line_color="#00e676", row=2, col=1)
 
+        # 3. Paolo BBW % & Seuil Compression (Reproduction exacte du MQL5)
+        if 'bbw' not in df_chart.columns or 'bbw_min' not in df_chart.columns:
+            bbw_d = TechnicalIndicators.calculate_paolo_bbw_compression(df_chart, period=80, dev=2.0, lookback=52)
+            df_chart['bbw'] = bbw_d['bbw_series']
+            df_chart['bbw_min'] = bbw_d['min_lookback_series']
+
+        # Plot 1 MQL5 : DodgerBlue
+        fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['bbw'], line=dict(color='#1e90ff', width=2), name='Paolo BBW %'), row=3, col=1)
+        # Plot 2 MQL5 : Red DOT (Seuil Compression Min)
+        fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['bbw_min'], line=dict(color='#ff1744', width=1.5, dash='dot'), name='Seuil Compression (Min)'), row=3, col=1)
+
         fig.update_layout(
-            title=f"Analyse Technique Complète (MM 5/20/80 + RSI 21) — {selected_sym}",
-            template="plotly_dark", height=650, xaxis_rangeslider_visible=False
+            template="plotly_dark", height=800, xaxis_rangeslider_visible=False,
+            margin=dict(l=40, r=40, t=50, b=30)
         )
         fig.update_yaxes(title_text="Prix ($)", row=1, col=1)
-        fig.update_yaxes(title_text="RSI 21", range=[10, 90], row=2, col=1)
+        fig.update_yaxes(title_text="RSI", range=[10, 90], row=2, col=1)
+        fig.update_yaxes(title_text="BBW %", row=3, col=1)
         st.plotly_chart(fig, use_container_width=True)

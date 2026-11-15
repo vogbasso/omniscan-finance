@@ -1,5 +1,6 @@
 import pandas as pd
-from typing import Tuple
+import numpy as np
+from typing import Tuple, Dict, Any
 
 class TechnicalIndicators:
     @staticmethod
@@ -31,6 +32,52 @@ class TechnicalIndicators:
             return "rsi_bullish"
         else:
             return "rsi_bearish"
+
+    @staticmethod
+    def calculate_paolo_bbw_compression(df: pd.DataFrame, period: int = 80, dev: float = 2.0, lookback: int = 52) -> Dict[str, Any]:
+        """
+        Implémentation fidèle de Paolo_BBW_Compression.mq5 adaptée sur la MM80 :
+        - Middle = MM80
+        - StdDev = Écart-type sur 80 bougies
+        - Upper = Middle + (dev * StdDev)
+        - Lower = Middle - (dev * StdDev)
+        - BBW % = ((Upper - Lower) / Middle) * 100
+        - Seuil Compression = Min BBW sur la période Lookback
+        """
+        close = df['Close']
+        middle = df['ma80'] if 'ma80' in df.columns else close.ewm(span=period, adjust=False).mean()
+        rolling_std = close.rolling(window=period, min_periods=25).std().fillna(close.std())
+
+        upper = middle + (dev * rolling_std)
+        lower = middle - (dev * rolling_std)
+
+        # Largeur relative en % (Plot 1 du MQL5)
+        bbw_series = ((upper - lower) / middle.replace(0, 1e-9)) * 100.0
+        bbw_series = bbw_series.fillna(0.0)
+
+        # Seuil de compression minimum (Plot 2 du MQL5)
+        min_lookback_series = bbw_series.rolling(window=lookback, min_periods=15).min().fillna(bbw_series)
+
+        last_bbw = float(bbw_series.iloc[-1])
+        last_min = float(min_lookback_series.iloc[-1])
+
+        # Détection de compression extrême (ressort comprimé)
+        is_squeeze = (last_bbw <= last_min * 1.08) or (last_bbw <= last_min)
+        
+        # Détection d'expansion
+        prev_bbw = float(bbw_series.iloc[-2]) if len(bbw_series) > 1 else last_bbw
+        is_expansion = (last_bbw > prev_bbw * 1.15) and not is_squeeze
+
+        status = "bbw_squeeze" if is_squeeze else ("bbw_expansion" if is_expansion else "bbw_normal")
+
+        return {
+            "bbw_series": bbw_series,
+            "min_lookback_series": min_lookback_series,
+            "current_bbw": round(last_bbw, 2),
+            "min_bbw": round(last_min, 2),
+            "is_squeeze": is_squeeze,
+            "status": status
+        }
 
     @staticmethod
     def evaluate_regime_and_state(df: pd.DataFrame) -> Tuple[str, str]:
