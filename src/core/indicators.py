@@ -7,26 +7,43 @@ class TechnicalIndicators:
         return series.ewm(span=span, adjust=False).mean()
 
     @staticmethod
+    def calculate_rsi(series: pd.Series, period: int = 21) -> pd.Series:
+        delta = series.diff()
+        gain = delta.clip(lower=0)
+        loss = -delta.clip(upper=0)
+        
+        avg_gain = gain.ewm(alpha=1/period, adjust=False, min_periods=period).mean()
+        avg_loss = loss.ewm(alpha=1/period, adjust=False, min_periods=period).mean()
+        
+        rs = avg_gain / avg_loss.replace(0, 1e-9)
+        rsi = 100 - (100 / (1 + rs))
+        return rsi.fillna(50.0)
+
+    @staticmethod
+    def evaluate_rsi_zone(rsi_val: float) -> str:
+        if rsi_val >= 70:
+            return "rsi_overbought"
+        elif rsi_val <= 30:
+            return "rsi_oversold"
+        elif 45 <= rsi_val <= 55:
+            return "rsi_neutral"
+        elif rsi_val > 55:
+            return "rsi_bullish"
+        else:
+            return "rsi_bearish"
+
+    @staticmethod
     def evaluate_regime_and_state(df: pd.DataFrame) -> Tuple[str, str]:
-        """
-        Calcule la persistance de la tendance de fond (Régime) :
-        - Bascule ACHETEUR dès qu'on a : 20 < 80 et Prix > 5, 20, 80
-        - Reste ACHETEUR tant qu'un signal VENDEUR n'intervient pas
-        - Bascule VENDEUR dès qu'on a : 20 > 80 et Prix < 5, 20, 80
-        - Reste VENDEUR tant qu'un signal ACHETEUR n'intervient pas
-        """
         regime = "regime_bull" if df['ma20'].iloc[0] > df['ma80'].iloc[0] else "regime_bear"
         is_fresh_signal = False
         last_signal = None
 
-        # Parcours de l'historique pour reconstituer la mémoire du régime
         for i in range(len(df)):
             p = float(df['close'].iloc[i])
             m5 = float(df['ma5'].iloc[i])
             m20 = float(df['ma20'].iloc[i])
             m80 = float(df['ma80'].iloc[i])
 
-            # Signal Vendeur : 20 > 80 et prix sous toutes les MM
             if m20 > m80 and (p < m5 and p < m20 and p < m80):
                 if regime != "regime_bear":
                     regime = "regime_bear"
@@ -34,7 +51,6 @@ class TechnicalIndicators:
                         is_fresh_signal = True
                         last_signal = "state_new_sell"
 
-            # Signal Acheteur : 20 < 80 et prix au-dessus de toutes les MM
             elif m20 < m80 and (p > m5 and p > m20 and p > m80):
                 if regime != "regime_bull":
                     regime = "regime_bull"
@@ -42,7 +58,6 @@ class TechnicalIndicators:
                         is_fresh_signal = True
                         last_signal = "state_new_buy"
 
-        # Dynamique sur la toute dernière bougie
         if is_fresh_signal and last_signal:
             return regime, last_signal
 
@@ -51,7 +66,6 @@ class TechnicalIndicators:
         last_m20 = float(df['ma20'].iloc[-1])
         last_m80 = float(df['ma80'].iloc[-1])
 
-        # Diagnostic instantané à l'intérieur du régime
         if last_m5 > last_m20 > last_m80:
             state = "state_strong_bull"
         elif last_m5 < last_m20 < last_m80:

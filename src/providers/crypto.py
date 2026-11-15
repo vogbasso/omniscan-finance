@@ -75,6 +75,7 @@ class BinanceCryptoProvider:
             df['ma5'] = TechnicalIndicators.calculate_ema(df['Close'], span=5)
             df['ma20'] = TechnicalIndicators.calculate_ema(df['Close'], span=20)
             df['ma80'] = TechnicalIndicators.calculate_ema(df['Close'], span=80)
+            df['rsi21'] = TechnicalIndicators.calculate_rsi(df['Close'], period=21)
 
             regime, state = TechnicalIndicators.evaluate_regime_and_state(df)
             
@@ -112,6 +113,8 @@ class BinanceCryptoProvider:
                 "volume": fmt_currency(last_vol_usd),
                 "market_cap": fmt_currency(cap_val) if cap_val else "N/A",
                 "ath_price": round(ath_price, 4),
+                "rsi": round(float(df['rsi21'].iloc[-1]), 1),
+                "rsi_zone": TechnicalIndicators.evaluate_rsi_zone(float(df['rsi21'].iloc[-1])),
                 "dist_ath_pct": round(dist_ath_pct, 2),
                 "regime": regime,
                 "state": state,

@@ -28,5 +28,11 @@
   "col_volume": "Volume",
   "col_marketcap": "Market Cap",
   "col_ath": "ATH Price ($)",
-  "col_dist_ath": "ATH Dist. (%)"
+  "col_dist_ath": "ATH Dist. (%)",
+  "col_rsi": "RSI (21)",
+  "rsi_overbought": "🔴 Overbought (≥70)",
+  "rsi_oversold": "🟢 Oversold (≤30)",
+  "rsi_neutral": "⚪ Neutral (45-55)",
+  "rsi_bullish": "↗️ Bullish (55-70)",
+  "rsi_bearish": "↘️ Bearish (30-45)"
 }

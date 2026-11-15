@@ -6,13 +6,14 @@ warnings.filterwarnings("ignore")
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import json
 
 from src.providers.crypto import BinanceCryptoProvider
 from src.providers.markets import UnifiedMarketProvider
 
 st.set_page_config(
-    page_title="OmniScan Finance - Grand Scan 5/20/80",
+    page_title="OmniScan Finance - Grand Scan 5/20/80 & RSI 21",
     page_icon="📈",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -22,7 +23,6 @@ def load_locale(lang: str = "fr"):
     with open(f"config/locales/{lang}.json", "r", encoding="utf-8") as f:
         return json.load(f)
 
-# Barre Latérale
 st.sidebar.title("🌐 OmniScan Finance")
 st.sidebar.caption("Architecte & Auteur : **Vogel Paolo BASSO**")
 
@@ -114,23 +114,12 @@ if custom_search:
         c1.metric("Prix Actuel", f"${custom_data['price']}")
         chg = custom_data['change_pct']
         c2.metric("Var. Hebdo", f"{'▲ +' if chg > 0 else '▼ '}{chg}%")
-        c3.metric("Record ATH", f"${custom_data.get('ath_price', 'N/A')}")
+        c3.metric("RSI (21)", f"{custom_data.get('rsi', 50.0)}")
         c4.metric("Distance ATH", f"{custom_data.get('dist_ath_pct', 0)}%")
         c5.metric("Capitalisation", custom_data['market_cap'])
         c6.metric("Tendance Fond", t.get(custom_data['regime'], custom_data['regime']))
 
-        fig_c = go.Figure()
-        fig_c.add_trace(go.Candlestick(
-            x=custom_df.index, open=custom_df['Open'], high=custom_df['High'],
-            low=custom_df['Low'], close=custom_df['Close'], name="Prix"
-        ))
-        fig_c.add_trace(go.Scatter(x=custom_df.index, y=custom_df['ma5'], line=dict(color='#00d4ff', width=1.5), name='MM5'))
-        fig_c.add_trace(go.Scatter(x=custom_df.index, y=custom_df['ma20'], line=dict(color='#ffaa00', width=2), name='MM20'))
-        fig_c.add_trace(go.Scatter(x=custom_df.index, y=custom_df['ma80'], line=dict(color='#d000ff', width=2.5), name='MM80'))
-        fig_c.update_layout(title=f"Graphique Hebdomadaire (5/20/80) — {custom_search}", template="plotly_dark", height=430, xaxis_rangeslider_visible=False)
-        st.plotly_chart(fig_c, use_container_width=True)
-
-# 🎯 RADAR D'ENTRÉE EN POSITION
+# RADAR D'ENTRÉE EN POSITION
 if results:
     opportunities = [r for r in results if r.get("is_entry_zone")]
     
@@ -145,7 +134,7 @@ if results:
                 st.markdown(f"#### **{opp['name']}** ({opp['symbol']})")
                 st.write(f"**Prix** : `${opp['price']}`")
                 st.write(f"**Signal** : `{opp['entry_type']}`")
-                st.write(f"**Distance ATH** : `{opp.get('dist_ath_pct', 0)}%`")
+                st.write(f"**RSI (21)** : `{opp.get('rsi', 50.0)}` — {t.get(opp.get('rsi_zone', ''), '')}")
     else:
         st.info("ℹ️ Aucun actif en zone de pullback immédiate sur cette sélection.")
 
@@ -160,7 +149,7 @@ if results:
     k3.metric("🔴 Régime Vendeur", f"{bear_count} ({round(bear_count/len(results)*100)}%)")
     k4.metric("🚀 Tendances Fortes", strong_bull)
 
-    # TABLEAU STYLISÉ AVEC ATH ET DISTANCE ATH
+    # TABLEAU STYLISÉ AVEC RSI 21
     st.markdown("---")
     st.subheader("📋 " + ("Résultats Détaillés du Marché" if lang_code == "fr" else "Detailed Market Results"))
     search_f = st.text_input("🔎 Filtrer dans la liste :" if lang_code == "fr" else "Quick filter:", "").strip().upper()
@@ -170,16 +159,14 @@ if results:
         if search_f and search_f not in r["symbol"] and search_f not in r.get("name", "").upper():
             continue
         chg_val = r["change_pct"]
-        if chg_val > 0:
-            chg_str = f"▲ +{chg_val:.2f}%"
-        elif chg_val < 0:
-            chg_str = f"▼ {chg_val:.2f}%"
-        else:
-            chg_str = "  0.00%"
-            
+        chg_str = f"▲ +{chg_val:.2f}%" if chg_val > 0 else (f"▼ {chg_val:.2f}%" if chg_val < 0 else "  0.00%")
         ath_p = f"${r.get('ath_price', 'N/A')}"
         d_ath = r.get('dist_ath_pct', 0.0)
         d_ath_str = f"🔥 {d_ath:.1f}%" if d_ath >= -3.0 else f"{d_ath:.1f}%"
+
+        rsi_val = r.get("rsi", 50.0)
+        rsi_zone_label = t.get(r.get("rsi_zone", "rsi_neutral"), "")
+        rsi_display = f"{rsi_val} | {rsi_zone_label}"
 
         statut_opp = r.get("entry_type", "") if r.get("is_entry_zone") else t.get(r["state"], r["state"])
         table_data.append({
@@ -187,6 +174,7 @@ if results:
             t["col_name"]: r.get("name", r["symbol"]),
             t["col_price"]: f"${r['price']}",
             t["col_change"]: chg_str,
+            t["col_rsi"]: rsi_display,
             t["col_ath"]: ath_p,
             t["col_dist_ath"]: d_ath_str,
             t["col_volume"]: r["volume"],
@@ -216,35 +204,63 @@ if results:
             return "background-color: rgba(255, 171, 0, 0.2); color: #ffab00; font-weight: bold;"
         return ""
 
+    def style_rsi_column(val):
+        if "Surachat" in str(val) or "Overbought" in str(val):
+            return "color: #ff5252; font-weight: bold;"
+        elif "Survente" in str(val) or "Oversold" in str(val):
+            return "color: #00e676; font-weight: bold;"
+        elif "Neutre" in str(val) or "Neutral" in str(val):
+            return "color: #b0bec5;"
+        elif "Haussier" in str(val) or "Bullish" in str(val):
+            return "color: #40c4ff; font-weight: 600;"
+        return ""
+
     styler = df_display.style
     try:
         styled_df = styler.map(style_change_column, subset=[t["col_change"]])\
                           .map(style_regime_column, subset=[t["col_regime"]])\
-                          .map(style_dist_ath, subset=[t["col_dist_ath"]])
+                          .map(style_dist_ath, subset=[t["col_dist_ath"]])\
+                          .map(style_rsi_column, subset=[t["col_rsi"]])
         st.dataframe(styled_df, use_container_width=True, height=450)
     except Exception:
-        try:
-            styled_df = styler.applymap(style_change_column, subset=[t["col_change"]])\
-                              .applymap(style_regime_column, subset=[t["col_regime"]])\
-                              .applymap(style_dist_ath, subset=[t["col_dist_ath"]])
-            st.dataframe(styled_df, use_container_width=True, height=450)
-        except Exception:
-            st.dataframe(df_display, use_container_width=True, height=450)
+        st.dataframe(df_display, use_container_width=True, height=450)
 
-    # Inspecteur graphique
+    # Inspecteur graphique avec sous-panneau RSI (21)
     st.markdown("---")
-    st.subheader("📈 " + ("Inspecteur Technique Candlestick & MM (5 / 20 / 80)" if lang_code == "fr" else "Technical Candlestick & MA (5 / 20 / 80) Inspector"))
+    st.subheader("📈 " + ("Inspecteur Technique Candlestick & RSI (21)" if lang_code == "fr" else "Technical Candlestick & RSI (21) Inspector"))
     selected_sym = st.selectbox("Sélectionnez un actif à afficher :" if lang_code == "fr" else "Select asset to inspect:", [r["symbol"] for r in results])
     df_chart = charts_cache.get(selected_sym)
 
     if df_chart is not None and not df_chart.empty:
-        fig = go.Figure()
+        # Graphique à 2 panneaux (Prix en haut, RSI 21 en bas)
+        fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.04, row_heights=[0.72, 0.28])
+
+        # Panneau 1 : Candlesticks & MM 5, 20, 80
         fig.add_trace(go.Candlestick(
             x=df_chart.index, open=df_chart['Open'], high=df_chart['High'],
             low=df_chart['Low'], close=df_chart['Close'], name="Prix"
-        ))
-        fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['ma5'], line=dict(color='#00d4ff', width=1.5), name='MM5 (Court terme)'))
-        fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['ma20'], line=dict(color='#ffaa00', width=2), name='MM20 (Moyen terme)'))
-        fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['ma80'], line=dict(color='#d000ff', width=2.5), name='MM80 (Tendance de fond)'))
-        fig.update_layout(title=f"Structure Hebdo (5 / 20 / 80) — {selected_sym}", template="plotly_dark", height=550, xaxis_rangeslider_visible=False)
+        ), row=1, col=1)
+        fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['ma5'], line=dict(color='#00d4ff', width=1.5), name='MM5'), row=1, col=1)
+        fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['ma20'], line=dict(color='#ffaa00', width=2), name='MM20'), row=1, col=1)
+        fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['ma80'], line=dict(color='#d000ff', width=2.5), name='MM80'), row=1, col=1)
+
+        # Panneau 2 : Oscillateur RSI (21)
+        if 'rsi21' not in df_chart.columns:
+            from src.core.indicators import TechnicalIndicators
+            df_chart['rsi21'] = TechnicalIndicators.calculate_rsi(df_chart['Close'], period=21)
+
+        fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['rsi21'], line=dict(color='#ffd600', width=2), name='RSI (21)'), row=2, col=1)
+        
+        # Lignes repères RSI (70, 55, 45, 30)
+        fig.add_hline(y=70, line_dash="dash", line_color="#ff5252", row=2, col=1)
+        fig.add_hline(y=55, line_dash="dot", line_color="#40c4ff", row=2, col=1)
+        fig.add_hline(y=45, line_dash="dot", line_color="#9e9e9e", row=2, col=1)
+        fig.add_hline(y=30, line_dash="dash", line_color="#00e676", row=2, col=1)
+
+        fig.update_layout(
+            title=f"Analyse Technique Complète (MM 5/20/80 + RSI 21) — {selected_sym}",
+            template="plotly_dark", height=650, xaxis_rangeslider_visible=False
+        )
+        fig.update_yaxes(title_text="Prix ($)", row=1, col=1)
+        fig.update_yaxes(title_text="RSI 21", range=[10, 90], row=2, col=1)
         st.plotly_chart(fig, use_container_width=True)
