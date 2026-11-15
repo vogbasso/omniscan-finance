@@ -370,8 +370,49 @@ if results:
             fig.add_trace(go.Scatter(x=df_chart.index, y=active_bbw_series, line=dict(color='#1e90ff', width=2), name=f'Paolo BBW % ({macro_name})'), row=3, col=1)
             fig.add_trace(go.Scatter(x=df_chart.index, y=active_bbw_min, line=dict(color='#ff1744', width=1.5, dash='dot'), name='Seuil Compression (Min)'), row=3, col=1)
 
-        fig.update_layout(template="plotly_dark", height=840, xaxis_rangeslider_visible=False, margin=dict(l=40, r=40, t=50, b=30))
+        # Configuration temporelle : Boutons de zoom par années et graduation explicite
+        fig.update_layout(
+            template="plotly_dark",
+            height=860,
+            margin=dict(l=40, r=40, t=65, b=40),
+            hovermode="x unified"
+        )
+        
+        # Boutons de sélection rapide de période temporelle
+        fig.update_xaxes(
+            rangeselector=dict(
+                buttons=list([
+                    dict(count=1, label="1 An", step="year", stepmode="backward"),
+                    dict(count=2, label="2 Ans", step="year", stepmode="backward"),
+                    dict(count=5, label="5 Ans", step="year", stepmode="backward"),
+                    dict(step="all", label="Tout (MAX)")
+                ]),
+                bgcolor="#1e222d",
+                activecolor="#2962ff",
+                font=dict(color="#ffffff", size=11),
+                y=1.05,
+                x=0.0
+            ),
+            rangeslider=dict(visible=False),
+            row=1, col=1
+        )
+
+        # Repères visuels clairs des années sur l'axe du bas
+        fig.update_xaxes(
+            tickformat="%b %Y",
+            dtick="M12",
+            showgrid=True,
+            gridcolor="rgba(255, 255, 255, 0.08)",
+            tickangle=-25,
+            row=3, col=1
+        )
+
+        # Grille verticale sur les étages 1 et 2 pour aligner les années
+        fig.update_xaxes(showgrid=True, gridcolor="rgba(255, 255, 255, 0.05)", row=1, col=1)
+        fig.update_xaxes(showgrid=True, gridcolor="rgba(255, 255, 255, 0.05)", row=2, col=1)
+
         fig.update_yaxes(title_text="Prix ($)", row=1, col=1)
         fig.update_yaxes(title_text="RSI", range=[10, 90], row=2, col=1)
         fig.update_yaxes(title_text="BBW %", row=3, col=1)
+
         st.plotly_chart(fig, use_container_width=True)
