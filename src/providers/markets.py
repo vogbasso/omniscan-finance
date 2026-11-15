@@ -1,6 +1,10 @@
+import os
+import json
+import time
 import warnings
 warnings.filterwarnings("ignore")
 
+import requests
 import yfinance as yf
 import pandas as pd
 from typing import List, Dict, Any
@@ -19,59 +23,56 @@ def fmt_currency(val: float) -> str:
         return f"${val/1e3:.2f}k"
     return f"${val:.2f}"
 
+SP500_CACHE_FILE = "data/sp500_cache.json"
+
+def get_dynamic_sp500_list() -> List[Dict[str, str]]:
+    """Récupère dynamiquement la composition officielle des 500 actions du S&P 500 avec cache 24h"""
+    os.makedirs("data", exist_ok=True)
+    
+    # Vérifier le cache (valide 24h)
+    if os.path.exists(SP500_CACHE_FILE):
+        file_age = time.time() - os.path.getmtime(SP500_CACHE_FILE)
+        if file_age < 86400:
+            try:
+                with open(SP500_CACHE_FILE, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except Exception:
+                pass
+
+    # Téléchargement en direct de la liste officielle du S&P 500
+    try:
+        url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+        response = requests.get(url, headers=headers, timeout=10)
+        tables = pd.read_html(response.text)
+        sp_table = tables[0]
+
+        sp500_list = []
+        for _, row in sp_table.iterrows():
+            sym = str(row['Symbol']).replace('.', '-')
+            name = str(row['Security'])
+            sp500_list.append({"symbol": sym, "name": name})
+
+        with open(SP500_CACHE_FILE, "w", encoding="utf-8") as f:
+            json.dump(sp500_list, f, indent=2, ensure_ascii=False)
+
+        return sp500_list
+    except Exception:
+        # Fallback de secours si Wikipédia est temporairement inaccessible
+        return [
+            {"symbol": "NVDA", "name": "Nvidia"},
+            {"symbol": "AAPL", "name": "Apple"},
+            {"symbol": "MSFT", "name": "Microsoft"},
+            {"symbol": "AMZN", "name": "Amazon"},
+            {"symbol": "GOOGL", "name": "Alphabet (Google)"},
+            {"symbol": "META", "name": "Meta Platforms"},
+            {"symbol": "TSLA", "name": "Tesla"},
+            {"symbol": "BRK-B", "name": "Berkshire Hathaway"},
+            {"symbol": "AVGO", "name": "Broadcom"},
+            {"symbol": "JPM", "name": "JPMorgan Chase"}
+        ]
+
 MARKET_CATALOG = {
-    "stocks": [
-        {"symbol": "NVDA", "name": "Nvidia"},
-        {"symbol": "AAPL", "name": "Apple"},
-        {"symbol": "MSFT", "name": "Microsoft"},
-        {"symbol": "AMZN", "name": "Amazon"},
-        {"symbol": "GOOGL", "name": "Alphabet (Google)"},
-        {"symbol": "META", "name": "Meta Platforms"},
-        {"symbol": "TSLA", "name": "Tesla"},
-        {"symbol": "BRK-B", "name": "Berkshire Hathaway"},
-        {"symbol": "AVGO", "name": "Broadcom"},
-        {"symbol": "JPM", "name": "JPMorgan Chase"},
-        {"symbol": "LLY", "name": "Eli Lilly"},
-        {"symbol": "V", "name": "Visa"},
-        {"symbol": "WMT", "name": "Walmart"},
-        {"symbol": "XOM", "name": "ExxonMobil"},
-        {"symbol": "MA", "name": "Mastercard"},
-        {"symbol": "ORCL", "name": "Oracle"},
-        {"symbol": "COST", "name": "Costco"},
-        {"symbol": "HD", "name": "Home Depot"},
-        {"symbol": "PG", "name": "Procter & Gamble"},
-        {"symbol": "NFLX", "name": "Netflix"},
-        {"symbol": "BAC", "name": "Bank of America"},
-        {"symbol": "CRM", "name": "Salesforce"},
-        {"symbol": "ABBV", "name": "AbbVie"},
-        {"symbol": "CVX", "name": "Chevron"},
-        {"symbol": "KO", "name": "Coca-Cola"},
-        {"symbol": "AMD", "name": "AMD"},
-        {"symbol": "PEP", "name": "PepsiCo"},
-        {"symbol": "LIN", "name": "Linde"},
-        {"symbol": "TMO", "name": "Thermo Fisher"},
-        {"symbol": "ADBE", "name": "Adobe"},
-        {"symbol": "MRK", "name": "Merck"},
-        {"symbol": "PLTR", "name": "Palantir Technologies"},
-        {"symbol": "DIS", "name": "Walt Disney"},
-        {"symbol": "QCOM", "name": "Qualcomm"},
-        {"symbol": "INTU", "name": "Intuit"},
-        {"symbol": "IBM", "name": "IBM"},
-        {"symbol": "CAT", "name": "Caterpillar"},
-        {"symbol": "TXN", "name": "Texas Instruments"},
-        {"symbol": "NOW", "name": "ServiceNow"},
-        {"symbol": "GE", "name": "General Electric"},
-        {"symbol": "UBER", "name": "Uber Technologies"},
-        {"symbol": "AMAT", "name": "Applied Materials"},
-        {"symbol": "VZ", "name": "Verizon"},
-        {"symbol": "PFE", "name": "Pfizer"},
-        {"symbol": "UNH", "name": "UnitedHealth"},
-        {"symbol": "INTC", "name": "Intel"},
-        {"symbol": "BA", "name": "Boeing"},
-        {"symbol": "NKE", "name": "Nike"},
-        {"symbol": "SBUX", "name": "Starbucks"},
-        {"symbol": "COIN", "name": "Coinbase"}
-    ],
     "forex": [
         {"symbol": "EURUSD=X", "name": "EUR / USD"},
         {"symbol": "GBPUSD=X", "name": "GBP / USD"},
@@ -118,6 +119,9 @@ MARKET_CATALOG = {
 class UnifiedMarketProvider:
     @staticmethod
     def get_market_assets(category: str, limit: int = 50) -> List[Dict[str, str]]:
+        if category == "stocks":
+            sp_all = get_dynamic_sp500_list()
+            return sp_all[:limit]
         assets = MARKET_CATALOG.get(category, [])
         return assets[:limit]
 
@@ -139,7 +143,7 @@ class UnifiedMarketProvider:
             prev_close = float(df['Close'].iloc[-2])
             change_pct = ((last_close - prev_close) / prev_close) * 100
 
-            # Calcul de l'ATH sur données historiques
+            # ATH réel calculé sur historique mensuel
             try:
                 hist_max = ticker.history(period="max", interval="1mo")
                 ath_price = float(hist_max['High'].max()) if not hist_max.empty else float(df['High'].max())
