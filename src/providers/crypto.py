@@ -17,27 +17,26 @@ def fmt_currency(val: float) -> str:
         return f"${val/1e3:.2f}k"
     return f"${val:.2f}"
 
-# LISTE EXHAUSTIVE DES STABLECOINS À EXCLURE SYSTÉMATIQUEMENT
 STABLECOINS = {
     "USDT", "USDC", "FDUSD", "USDE", "USD1", "DAI", "TUSD", "USDD", 
     "PYUSD", "BUSD", "GUSD", "USDP", "FRAX", "LUSD", "USD0", "SUSD",
     "USTC", "USDJ", "CUSD", "EURS", "EURC", "AEUR", "EURI", "WBTC", "BTCB"
 }
 
-_COINGECKO_TOP_CACHE = []
+_COINGECKO_CACHE = []
 
 def get_top_cryptos_by_market_cap():
-    global _COINGECKO_TOP_CACHE
-    if not _COINGECKO_TOP_CACHE:
+    global _COINGECKO_CACHE
+    if not _COINGECKO_CACHE:
         try:
             url = "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=150&page=1"
             headers = {'User-Agent': 'Mozilla/5.0'}
             resp = requests.get(url, headers=headers, timeout=8).json()
             if isinstance(resp, list):
-                _COINGECKO_TOP_CACHE = resp
+                _COINGECKO_CACHE = resp
         except Exception:
             pass
-    return _COINGECKO_TOP_CACHE
+    return _COINGECKO_CACHE
 
 class BinanceCryptoProvider:
     def __init__(self):
@@ -49,51 +48,35 @@ class BinanceCryptoProvider:
     def fetch_top_pairs(self, quote: str = "USDT", limit: int = 50) -> List[Dict[str, Any]]:
         try:
             self.exchange.load_markets()
-            available_symbols = set(self.exchange.symbols)
-            cg_list = get_top_cryptos_by_market_cap()
-
-            selected_pairs = []
-            if cg_list:
-                for coin in cg_list:
-                    base = coin['symbol'].upper()
-                    # 1. Vérification par liste noire
-                    if base in STABLECOINS or base.startswith("USD") or base.endswith("USD"):
+            available = set(self.exchange.symbols)
+            cg = get_top_cryptos_by_market_cap()
+            selected = []
+            if cg:
+                for c in cg:
+                    base = c['symbol'].upper()
+                    if base in STABLECOINS or base.startswith("USD"):
                         continue
-                    # 2. Vérification par nom
-                    c_name = coin.get("name", "").lower()
-                    if "usd" in c_name or "tether" in c_name or "stablecoin" in c_name:
-                        continue
-
                     pair = f"{base}/{quote}"
-                    if pair in available_symbols:
-                        selected_pairs.append({
+                    if pair in available:
+                        selected.append({
                             "symbol": pair,
-                            "name": coin.get("name", base),
-                            "market_cap": coin.get("market_cap", 0),
-                            "ath": coin.get("ath", 0)
+                            "name": c.get("name", base),
+                            "market_cap": c.get("market_cap", 0),
+                            "ath": c.get("ath", 0)
                         })
-                    if len(selected_pairs) >= limit:
+                    if len(selected) >= limit:
                         break
 
-            # Fallback Binance si besoin
-            if not selected_pairs:
+            if not selected:
                 tickers = self.exchange.fetch_tickers()
-                for sym, t in tickers.items():
-                    if not sym.endswith(f"/{quote}"):
-                        continue
-                    base = sym.split('/')[0].upper()
-                    if base in STABLECOINS or base.startswith("USD") or base.endswith("USD"):
-                        continue
-                    selected_pairs.append({
-                        "symbol": sym,
-                        "name": base,
-                        "market_cap": 0,
-                        "ath": 0
-                    })
-                    if len(selected_pairs) >= limit:
+                for sym in tickers.keys():
+                    if sym.endswith(f"/{quote}"):
+                        base = sym.split('/')[0].upper()
+                        if base not in STABLECOINS and not base.startswith("USD"):
+                            selected.append({"symbol": sym, "name": base, "market_cap": 0, "ath": 0})
+                    if len(selected) >= limit:
                         break
-
-            return selected_pairs
+            return selected
         except Exception:
             return []
 
@@ -105,7 +88,7 @@ class BinanceCryptoProvider:
             base_coin = symbol.split('/')[0].upper()
             if base_coin in STABLECOINS or base_coin.startswith("USD"):
                 return {}
-                
+
             ohlcv = self.exchange.fetch_ohlcv(symbol, timeframe=timeframe, limit=limit)
             if len(ohlcv) < 25:
                 return {}
@@ -119,7 +102,6 @@ class BinanceCryptoProvider:
             df['Low'] = df['low']
 
             last_close = float(df['Close'].iloc[-1])
-            # Élimination des tokens pegged à 1$
             if 0.985 <= last_close <= 1.015 and df['Close'].std() < 0.02:
                 return {}
 
@@ -134,27 +116,14 @@ class BinanceCryptoProvider:
 
             regime, state = TechnicalIndicators.evaluate_regime_and_state(df)
             rsi21_strat = TechnicalIndicators.evaluate_rsi21_polarity_strategy(df)
-            
+
             prev_close = float(df['Close'].iloc[-2])
             change_pct = ((last_close - prev_close) / prev_close) * 100
             last_vol_usd = float(df['volume'].iloc[-1]) * last_close
 
             ath_price = float(df['High'].max())
             dist_ath_pct = ((last_close - ath_price) / ath_price) * 100 if ath_price > 0 else 0.0
-
             cap_val = meta_info.get("market_cap", 0) if meta_info else 0
-
-            is_near_signal = False
-            dist_to_signal = 0.0
-            ma80_val = float(df['ma80'].iloc[-1])
-            ma20_val = float(df['ma20'].iloc[-1])
-            ma5_val = float(df['ma5'].iloc[-1])
-            
-            if ma20_val < ma80_val and last_close > ma5_val and last_close > ma20_val and last_close < ma80_val:
-                gap_pct = ((ma80_val - last_close) / last_close) * 100
-                if gap_pct <= 3.5:
-                    is_near_signal = True
-                    dist_to_signal = round(gap_pct, 2)
 
             return {
                 "symbol": symbol,
@@ -173,16 +142,13 @@ class BinanceCryptoProvider:
                 "bbw_min": bbw_res['min_bbw'],
                 "bbw_squeeze": bbw_res['is_squeeze'],
                 "bbw_status": bbw_res['status'],
+                "regime": regime,
+                "state": state,
                 "rsi21_strat": rsi21_strat,
                 "rsi_polarity": rsi21_strat['polarity'],
                 "rsi_state": rsi21_strat['state'],
                 "rsi_sl": rsi21_strat['sl_price'],
                 "rsi_tp1": rsi21_strat['tp1_price'],
-                "regime": regime,
-                "state": state,
-                "is_near_signal": is_near_signal,
-                "dist_to_signal": dist_to_signal,
-                "trigger_price": round(ma80_val, 4),
                 "df": df
             }
         except Exception:

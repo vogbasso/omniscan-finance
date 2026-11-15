@@ -62,7 +62,6 @@ class TechnicalIndicators:
 
     @staticmethod
     def evaluate_regime_and_state(df: pd.DataFrame) -> Tuple[str, str]:
-        """Stratégie 5/20/80 originelle"""
         regime = "regime_bull" if df['ma20'].iloc[0] > df['ma80'].iloc[0] else "regime_bear"
         is_fresh_signal = False
         last_signal = None
@@ -110,22 +109,12 @@ class TechnicalIndicators:
 
     @staticmethod
     def evaluate_rsi21_polarity_strategy(df: pd.DataFrame) -> Dict[str, Any]:
-        """
-        STRATÉGIE PAR DÉFAUT : RSI 21 Polarité & Pullback 50 + Crossover MM 5/20
-        - Polarité devient acheteuse quand RSI quitte survente (<=30) pour surachat (>=70)
-        - Pullback confirmé sous 50
-        - Entrée sur croisement MM5 > MM20
-        - Stop Loss Trade 1 = plus bas lors du RSI <= 30
-        - Stop Loss Trades suivants = plus bas du pullback sous 50
-        - TP1 = 1:1, puis retour en zone 70
-        """
         polarity = False
         has_touched_oversold = False
         oversold_lowest_low = None
         current_pullback_lowest = None
         pullback_confirmed = False
         trade_count = 0
-
         last_signal_event = None
         active_trade = None
 
@@ -139,20 +128,16 @@ class TechnicalIndicators:
             prev_m5 = float(df['ma5'].iloc[i-1]) if i > 0 else m5
             prev_m20 = float(df['ma20'].iloc[i-1]) if i > 0 else m20
 
-            # 1. Détection de la phase de survente
             if rsi <= 30:
                 has_touched_oversold = True
                 oversold_lowest_low = low if oversold_lowest_low is None else min(oversold_lowest_low, low)
 
-            # 2. Validation de la polarité acheteuse (Survente -> Surachat)
             if has_touched_oversold and rsi >= 70:
                 polarity = True
                 has_touched_oversold = False
                 pullback_confirmed = False
 
-            # 3. Une fois en polarité acheteuse
             if polarity:
-                # Détection du pullback sous 50
                 if rsi < 50:
                     if not pullback_confirmed:
                         pullback_confirmed = True
@@ -160,21 +145,18 @@ class TechnicalIndicators:
                     else:
                         current_pullback_lowest = min(current_pullback_lowest, low)
 
-                # Croisement MM5 > MM20 après un pullback sous 50
                 is_crossover = (prev_m5 <= prev_m20 and m5 > m20)
                 if pullback_confirmed and is_crossover:
                     trade_count += 1
-                    # Stop loss : Trade 1 = survente, Trade 2+ = pullback précédent
                     if trade_count == 1:
                         sl = oversold_lowest_low if oversold_lowest_low is not None else low
                         t_type = "Trade 1 (Post-Survente)"
                     else:
                         sl = current_pullback_lowest if current_pullback_lowest is not None else low
-                        t_type = f"Trade {trade_count} (Post-Pullback)"
+                        t_type = f"Trade {trade_count} (Post-Pullback < 50)"
 
                     risk = close - sl
                     tp1 = close + risk if risk > 0 else close * 1.05
-
                     pullback_confirmed = False
                     current_pullback_lowest = None
 
@@ -182,21 +164,16 @@ class TechnicalIndicators:
                         "entry": close,
                         "sl": sl,
                         "tp1": tp1,
-                        "trade_type": t_type,
-                        "candle_idx": i
+                        "trade_type": t_type
                     }
-
                     if i == n - 1:
                         last_signal_event = "signal_buy_fresh"
 
-        # Diagnostic de l'état actuel sur la dernière bougie
         last_rsi = float(df['rsi21'].iloc[-1])
-        last_close = float(df['Close'].iloc[-1])
-
         if last_signal_event == "signal_buy_fresh" and active_trade:
             state = "STATE_FRESH_BUY"
         elif polarity and pullback_confirmed:
-            state = "STATE_PULLBACK_50"  # En zone de guet pour le croisement
+            state = "STATE_PULLBACK_50"
         elif polarity and last_rsi >= 70:
             state = "STATE_OVERBOUGHT_IMPULSE"
         elif polarity:
@@ -208,10 +185,7 @@ class TechnicalIndicators:
             "polarity": "POLARITY_BULL" if polarity else "POLARITY_WAIT",
             "state": state,
             "trade_count": trade_count,
-            "pullback_confirmed": pullback_confirmed,
-            "active_trade": active_trade,
             "sl_price": round(active_trade['sl'], 4) if active_trade else None,
             "tp1_price": round(active_trade['tp1'], 4) if active_trade else None,
-            "entry_price": round(active_trade['entry'], 4) if active_trade else None,
             "trade_type": active_trade['trade_type'] if active_trade else ""
         }

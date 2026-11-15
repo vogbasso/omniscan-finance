@@ -11,7 +11,6 @@ import json
 
 from src.providers.crypto import BinanceCryptoProvider
 from src.providers.markets import UnifiedMarketProvider
-from src.core.indicators import TechnicalIndicators
 
 st.set_page_config(
     page_title="OmniScan Finance - Screener RSI 21 & MM 5/20/80",
@@ -32,10 +31,8 @@ lang_code = "fr" if lang == "Français" else "en"
 t = load_locale(lang_code)
 
 st.sidebar.markdown("---")
-
-# SÉLECTEUR DE STRATÉGIE (RSI 21 EN OPTION PAR DÉFAUT)
 strategy_choice = st.sidebar.radio(
-    "Méthode d'Analyse" if lang_code == "fr" else "Analysis Strategy",
+    "Méthode d'Analyse" if lang_code == "fr" else "Strategy",
     options=[
         "🌟 RSI 21 / MM 5-20 / Pullback 50 (Défaut)",
         "📊 Triple MM 5 / 20 / 80 (Regime & BBW)"
@@ -69,16 +66,11 @@ scan_limit = st.sidebar.slider(
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("🔍 " + ("Recherche Ciblée" if lang_code == "fr" else "Targeted Search"))
-raw_search = st.sidebar.text_input(
-    "Ticker personnalisé (ex: BTC/USDT, NVDA)" if lang_code == "fr" else "Custom Ticker",
-    value=""
-)
-custom_search = raw_search.strip().upper()
+custom_search = st.sidebar.text_input("Ticker personnalisé (ex: BTC/USDT, NVDA)", value="").strip().upper()
 
 timeframe_display = "Hebdomadaire (Weekly - 1w)" if lang_code == "fr" else "Weekly (1w)"
 st.sidebar.info(f"⏱️ **Timeframe** : {timeframe_display}")
 
-# En-tête
 if is_rsi_strategy:
     st.title("🌟 OmniScan Finance — Stratégie RSI 21 / Pullback 50 & MM 5-20")
     st.caption("Polarité haussière (Survente $\le 30 ightarrow$ Surachat $\ge 70$) • Pullback sous 50 • Crossover MM 5/20 • Long Only")
@@ -109,15 +101,12 @@ def get_scanned_data(category: str, limit: int):
                 results.append(data)
     return results, charts
 
-with st.spinner("Analyse quantitative des flux..." if lang_code == "fr" else "Running quantitative scan..."):
+with st.spinner("Analyse quantitative des flux..." if lang_code == "fr" else "Running scan..."):
     results, charts_cache = get_scanned_data(selected_category, scan_limit)
 
-# GESTION DES RADARS SELON LA STRATÉGIE ACTIVE
 if results:
     st.markdown("---")
-    
     if is_rsi_strategy:
-        # STRATÉGIE RSI 21 : RADAR SIGNAUX FRAIS + ZONE DE PULLBACK SOUS 50
         fresh_rsi_buys = [r for r in results if r.get("rsi_state") == "STATE_FRESH_BUY"]
         pullback_setups = [r for r in results if r.get("rsi_state") == "STATE_PULLBACK_50"]
 
@@ -149,13 +138,9 @@ if results:
                     st.write(f"**Paolo BBW** : `{pb.get('bbw')}%`")
         else:
             st.info("ℹ️ Aucun actif actuellement en phase de pullback sous 50.")
-
     else:
-        # STRATÉGIE 5/20/80
         fresh_signals = [r for r in results if r.get("state") == "state_new_buy"]
-        imminent_setups = [r for r in results if r.get("is_near_signal")]
-
-        st.subheader("🎯 RADAR 1 : SIGNAUX D'ACHAT FRAIS (CASSURE 5/20/80)")
+        st.subheader("🎯 RADAR 1 : SIGNAUX D'ACHAT FRAIS (5/20/80)")
         if fresh_signals:
             st.success(f"🔥 {len(fresh_signals)} signal(ux) frais détecté(s) !")
             cols1 = st.columns(min(len(fresh_signals), 4))
@@ -167,20 +152,6 @@ if results:
         else:
             st.info("🛡️ Aucun signal d'achat frais 5/20/80 cette semaine.")
 
-        st.markdown("---")
-        st.subheader("🔭 RADAR 2 : ZONE DE VEILLE MM80")
-        if imminent_setups:
-            st.warning(f"👀 {len(imminent_setups)} actif(s) en attaque directe de la MM80 !")
-            cols2 = st.columns(min(len(imminent_setups), 4))
-            for idx, imm in enumerate(imminent_setups[:4]):
-                with cols2[idx]:
-                    st.markdown(f"#### **{imm['name']}** ({imm['symbol']})")
-                    st.write(f"**Prix** : `${imm['price']}`")
-                    st.write(f"**Cible MM80** : `${imm.get('trigger_price')}`")
-        else:
-            st.info("ℹ️ Aucun actif à moins de 3.5% de sa MM80.")
-
-    # Synthèse générale
     st.markdown("---")
     k1, k2, k3, k4 = st.columns(4)
     k1.metric("Actifs Scannés", len(results))
@@ -190,10 +161,9 @@ if results:
     squeeze_count = sum(1 for r in results if r.get("bbw_squeeze"))
     k4.metric("⚡ Squeeze Paolo BBW", squeeze_count)
 
-    # TABLEAU GÉNÉRAL COMPLET (AFFICHE TOUJOURS LES 3 MM 5, 20, 80)
     st.markdown("---")
     st.subheader("📋 " + ("Résultats Détaillés du Marché" if lang_code == "fr" else "Detailed Market Results"))
-    search_f = st.text_input("🔎 Filtrer dans la liste :" if lang_code == "fr" else "Quick filter:", "").strip().upper()
+    search_f = st.text_input("🔎 Filtrer dans la liste :", "").strip().upper()
 
     table_data = []
     for r in results:
@@ -201,14 +171,11 @@ if results:
             continue
         chg_val = r["change_pct"]
         chg_str = f"▲ +{chg_val:.2f}%" if chg_val > 0 else (f"▼ {chg_val:.2f}%" if chg_val < 0 else "  0.00%")
-        
         rsi_val = r.get("rsi", 50.0)
         rsi_display = f"{rsi_val} | {t.get(r.get('rsi_zone', 'rsi_neutral'), '')}"
-
         bbw_val = r.get("bbw", 0.0)
         bbw_str = f"⚡ {bbw_val:.1f}% (Squeeze)" if r.get("bbw_squeeze") else f"{bbw_val:.1f}%"
 
-        # Gestion des colonnes selon la stratégie
         if is_rsi_strategy:
             polarity_label = "🟢 ACHETEUSE" if r.get("rsi_polarity") == "POLARITY_BULL" else "⚪ ATTENTE"
             r_state = r.get("rsi_state", "")
@@ -231,9 +198,9 @@ if results:
                 t["col_name"]: r.get("name", r["symbol"]),
                 t["col_price"]: f"${r['price']}",
                 t["col_change"]: chg_str,
-                "MM5": f"${r.get('df_m5', r['price']):.2f}" if 'df_m5' in r else f"${r['price']:.2f}",
-                "MM20": f"${r.get('df_m20', r['price']):.2f}" if 'df_m20' in r else f"${r['price']:.2f}",
-                "MM80": f"${r.get('df_m80', r['price']):.2f}" if 'df_m80' in r else f"${r['price']:.2f}",
+                "MM5": f"${r.get('df_m5', r['price']):.2f}",
+                "MM20": f"${r.get('df_m20', r['price']):.2f}",
+                "MM80": f"${r.get('df_m80', r['price']):.2f}",
                 "RSI (21)": rsi_display,
                 "Polarité": polarity_label,
                 "État Stratégie": statut_str,
@@ -248,9 +215,9 @@ if results:
                 t["col_name"]: r.get("name", r["symbol"]),
                 t["col_price"]: f"${r['price']}",
                 t["col_change"]: chg_str,
-                "MM5": f"${r.get('df_m5', r['price']):.2f}" if 'df_m5' in r else f"${r['price']:.2f}",
-                "MM20": f"${r.get('df_m20', r['price']):.2f}" if 'df_m20' in r else f"${r['price']:.2f}",
-                "MM80": f"${r.get('df_m80', r['price']):.2f}" if 'df_m80' in r else f"${r['price']:.2f}",
+                "MM5": f"${r.get('df_m5', r['price']):.2f}",
+                "MM20": f"${r.get('df_m20', r['price']):.2f}",
+                "MM80": f"${r.get('df_m80', r['price']):.2f}",
                 "RSI (21)": rsi_display,
                 t["col_regime"]: t.get(r["regime"], r["regime"]),
                 "État Stratégie": t.get(r["state"], r["state"]),
@@ -288,10 +255,9 @@ if results:
     except Exception:
         st.dataframe(df_display, use_container_width=True, height=450)
 
-    # GRAPHIQUE INTERACTIF À 3 ÉTAGES (CHANDELIERS + RSI 21 AVEC NIVEAU 50 + PAOLO BBW)
     st.markdown("---")
-    st.subheader("📈 " + ("Inspecteur Technique : Chandeliers + RSI 21 (Niveau 50) + Paolo BBW" if lang_code == "fr" else "Technical Inspector"))
-    selected_sym = st.selectbox("Sélectionnez un actif :" if lang_code == "fr" else "Select asset:", [r["symbol"] for r in results])
+    st.subheader("📈 Inspecteur Technique : Chandeliers + RSI 21 (Niveau 50) + Paolo BBW")
+    selected_sym = st.selectbox("Sélectionnez un actif :", [r["symbol"] for r in results])
     df_chart = charts_cache.get(selected_sym)
 
     if df_chart is not None and not df_chart.empty:
@@ -304,23 +270,16 @@ if results:
                 "Paolo BBW % (Bandes 80) & Seuil Compression (Min Lookback)"
             )
         )
-
-        # Étage 1 : Chandeliers et MM 5, 20, 80
-        fig.add_trace(go.Candlestick(
-            x=df_chart.index, open=df_chart['Open'], high=df_chart['High'],
-            low=df_chart['Low'], close=df_chart['Close'], name="Prix"
-        ), row=1, col=1)
+        fig.add_trace(go.Candlestick(x=df_chart.index, open=df_chart['Open'], high=df_chart['High'], low=df_chart['Low'], close=df_chart['Close'], name="Prix"), row=1, col=1)
         fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['ma5'], line=dict(color='#00d4ff', width=1.5), name='MM5'), row=1, col=1)
         fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['ma20'], line=dict(color='#ffaa00', width=2), name='MM20'), row=1, col=1)
         fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['ma80'], line=dict(color='#d000ff', width=2.5), name='MM80'), row=1, col=1)
 
-        # Étage 2 : RSI 21 avec niveau 50 central
         fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['rsi21'], line=dict(color='#ffd600', width=2), name='RSI 21'), row=2, col=1)
         fig.add_hline(y=70, line_dash="dash", line_color="#ff5252", annotation_text="Surachat 70", row=2, col=1)
         fig.add_hline(y=50, line_dash="solid", line_color="#ffffff", annotation_text="Pivot 50 (Pullback)", row=2, col=1)
         fig.add_hline(y=30, line_dash="dash", line_color="#00e676", annotation_text="Survente 30", row=2, col=1)
 
-        # Étage 3 : Paolo BBW MQL5
         fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['bbw'], line=dict(color='#1e90ff', width=2), name='Paolo BBW %'), row=3, col=1)
         fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['bbw_min'], line=dict(color='#ff1744', width=1.5, dash='dot'), name='Seuil Compression (Min)'), row=3, col=1)
 
