@@ -221,9 +221,14 @@ if results:
     styler = df_display.style
     mapper = getattr(styler, "map", getattr(styler, "applymap", None))
     
-    if mapper:
+    if hasattr(styler, "map"):
+        styled_df = styler.map(style_change_column, subset=[t["col_change"]]).map(style_regime_column, subset=[t["col_regime"]])
+        st.dataframe(styled_df, use_container_width=True, height=450)
+    elif hasattr(styler, "applymap"):
         styled_df = styler.applymap(style_change_column, subset=[t["col_change"]]).applymap(style_regime_column, subset=[t["col_regime"]])
         st.dataframe(styled_df, use_container_width=True, height=450)
+    else:
+        st.dataframe(df_display, use_container_width=True, height=450)
     else:
         st.dataframe(df_display, use_container_width=True, height=450)
 
