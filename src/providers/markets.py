@@ -41,8 +41,7 @@ MARKET_CATALOG = {
     "forex": [
         {"symbol": "EURUSD=X", "name": "EUR / USD"}, {"symbol": "GBPUSD=X", "name": "GBP / USD"},
         {"symbol": "USDJPY=X", "name": "USD / JPY"}, {"symbol": "USDCHF=X", "name": "USD / CHF"},
-        {"symbol": "AUDUSD=X", "name": "AUD / USD"}, {"symbol": "USDCAD=X", "name": "USD / CAD"},
-        {"symbol": "NZDUSD=X", "name": "NZD / USD"}, {"symbol": "EURGBP=X", "name": "EUR / GBP"}
+        {"symbol": "AUDUSD=X", "name": "AUD / USD"}, {"symbol": "USDCAD=X", "name": "USD / CAD"}
     ],
     "commodities": [
         {"symbol": "GC=F", "name": "Or (Gold)"}, {"symbol": "SI=F", "name": "Argent (Silver)"},
@@ -55,7 +54,7 @@ MARKET_CATALOG = {
         {"symbol": "^GDAXI", "name": "DAX 40 (Allemagne)"}, {"symbol": "^N225", "name": "Nikkei 225 (Japon)"}
     ],
     "etf": [
-        {"symbol": "SPY", "name": "SPDR S&P 500 ETF"}, {"symbol": "QQQ", "name": "Invesco QQQ (Nasdaq 100)"},
+        {"symbol": "SPY", "name": "SPDR S&P 500 ETF"}, {"symbol": "QQQ", "name": "Invesco QQQ"},
         {"symbol": "SMH", "name": "VanEck Semiconductor ETF"}, {"symbol": "GLD", "name": "SPDR Gold Shares"},
         {"symbol": "TLT", "name": "iShares 20+ Year Treasury"}, {"symbol": "IWM", "name": "iShares Russell 2000"}
     ]
@@ -64,8 +63,7 @@ MARKET_CATALOG = {
 class UnifiedMarketProvider:
     @staticmethod
     def get_market_assets(category: str, limit: int = 50) -> List[Dict[str, str]]:
-        assets = MARKET_CATALOG.get(category, [])
-        return assets[:limit]
+        return MARKET_CATALOG.get(category, [])[:limit]
 
     @staticmethod
     def fetch_and_analyze(symbol: str, timeframe: str = '1wk', period: str = '10y') -> Dict[str, Any]:
@@ -75,7 +73,6 @@ class UnifiedMarketProvider:
             if df.empty or len(df) < 25:
                 return {}
 
-            # Normalisation systématique des colonnes
             df['Close'] = df['Close'] if 'Close' in df.columns else df['close']
             df['Open'] = df['Open'] if 'Open' in df.columns else df['open']
             df['High'] = df['High'] if 'High' in df.columns else df['high']
@@ -94,8 +91,6 @@ class UnifiedMarketProvider:
             df['bbw80_min'] = bbw80_res['min_lookback_series']
             df['bbw320'] = bbw320_res['bbw_series']
             df['bbw320_min'] = bbw320_res['min_lookback_series']
-            df['bbw'] = bbw_res['bbw_series']
-            df['bbw_min'] = bbw_res['min_lookback_series']
 
             regime, state = TechnicalIndicators.evaluate_regime_and_state(df)
             rsi21_strat = TechnicalIndicators.evaluate_rsi21_polarity_strategy(df)
@@ -123,8 +118,10 @@ class UnifiedMarketProvider:
                 "df_m80": float(df['ma80'].iloc[-1]),
                 "df_m320": float(df['ma320'].iloc[-1]),
                 "bbw80": bbw80_res['current_bbw'],
+                "bbw80_min": bbw80_res['min_bbw'],
                 "bbw80_squeeze": bbw80_res['is_squeeze'],
                 "bbw320": bbw320_res['current_bbw'],
+                "bbw320_min": bbw320_res['min_bbw'],
                 "bbw320_squeeze": bbw320_res['is_squeeze'],
                 "change_pct": round(change_pct, 2),
                 "volume": fmt_currency(vol_val),
@@ -133,10 +130,6 @@ class UnifiedMarketProvider:
                 "dist_ath_pct": round(dist_ath_pct, 2),
                 "rsi": round(float(df['rsi21'].iloc[-1]), 1),
                 "rsi_zone": TechnicalIndicators.evaluate_rsi_zone(float(df['rsi21'].iloc[-1])),
-                "bbw": bbw_res['current_bbw'],
-                "bbw_min": bbw_res['min_bbw'],
-                "bbw_squeeze": bbw_res['is_squeeze'],
-                "bbw_status": bbw_res['status'],
                 "regime": regime,
                 "state": state,
                 "rsi21_strat": rsi21_strat,

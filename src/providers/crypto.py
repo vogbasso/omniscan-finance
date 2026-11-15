@@ -105,20 +105,20 @@ class BinanceCryptoProvider:
             if 0.985 <= last_close <= 1.015 and df['Close'].std() < 0.02:
                 return {}
 
+            # Calcul des MM
             df['ma5'] = TechnicalIndicators.calculate_ema(df['Close'], span=5)
             df['ma20'] = TechnicalIndicators.calculate_ema(df['Close'], span=20)
             df['ma80'] = TechnicalIndicators.calculate_ema(df['Close'], span=80)
             df['ma320'] = TechnicalIndicators.calculate_ema(df['Close'], span=320)
             df['rsi21'] = TechnicalIndicators.calculate_rsi(df['Close'], period=21)
 
+            # Calcul explicite des deux BBW (80 et 320)
             bbw80_res = TechnicalIndicators.calculate_paolo_bbw_compression(df, period=80, dev=2.0, lookback=52)
             bbw320_res = TechnicalIndicators.calculate_paolo_bbw_compression(df, period=320, dev=2.0, lookback=52)
             df['bbw80'] = bbw80_res['bbw_series']
             df['bbw80_min'] = bbw80_res['min_lookback_series']
             df['bbw320'] = bbw320_res['bbw_series']
             df['bbw320_min'] = bbw320_res['min_lookback_series']
-            df['bbw'] = bbw_res['bbw_series']
-            df['bbw_min'] = bbw_res['min_lookback_series']
 
             regime, state = TechnicalIndicators.evaluate_regime_and_state(df)
             rsi21_strat = TechnicalIndicators.evaluate_rsi21_polarity_strategy(df)
@@ -139,8 +139,10 @@ class BinanceCryptoProvider:
                 "df_m80": float(df['ma80'].iloc[-1]),
                 "df_m320": float(df['ma320'].iloc[-1]),
                 "bbw80": bbw80_res['current_bbw'],
+                "bbw80_min": bbw80_res['min_bbw'],
                 "bbw80_squeeze": bbw80_res['is_squeeze'],
                 "bbw320": bbw320_res['current_bbw'],
+                "bbw320_min": bbw320_res['min_bbw'],
                 "bbw320_squeeze": bbw320_res['is_squeeze'],
                 "change_pct": round(change_pct, 2),
                 "volume": fmt_currency(last_vol_usd),
@@ -149,10 +151,6 @@ class BinanceCryptoProvider:
                 "dist_ath_pct": round(dist_ath_pct, 2),
                 "rsi": round(float(df['rsi21'].iloc[-1]), 1),
                 "rsi_zone": TechnicalIndicators.evaluate_rsi_zone(float(df['rsi21'].iloc[-1])),
-                "bbw": bbw_res['current_bbw'],
-                "bbw_min": bbw_res['min_bbw'],
-                "bbw_squeeze": bbw_res['is_squeeze'],
-                "bbw_status": bbw_res['status'],
                 "regime": regime,
                 "state": state,
                 "rsi21_strat": rsi21_strat,
@@ -160,8 +158,8 @@ class BinanceCryptoProvider:
                 "rsi_state": rsi21_strat['state'],
                 "rsi_sl": rsi21_strat['sl_price'],
                 "rsi_tp1": rsi21_strat['tp1_price'],
-                "trade_signals_history": rsi21_strat['trade_signals_history'],
+                "trade_signals_history": rsi21_strat.get('trade_signals_history', []),
                 "df": df
             }
-        except Exception:
+        except Exception as e:
             return {}
