@@ -49,6 +49,7 @@ st.sidebar.subheader("⚙️ " + ("Configuration du Scan" if lang_code == "fr" e
 
 market_options = {
     "crypto": t["menu_crypto"],
+    "retirement": t.get("menu_retirement", "💼 Mon Plan Retraite"),
     "stocks": t["menu_stocks"],
     "forex": t["menu_forex"],
     "commodities": t["menu_commodities"],
