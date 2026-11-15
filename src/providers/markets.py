@@ -143,6 +143,7 @@ class UnifiedMarketProvider:
             df['close'] = df['Close']
 
             regime, state = TechnicalIndicators.evaluate_regime_and_state(df)
+            rsi21_strat = TechnicalIndicators.evaluate_rsi21_polarity_strategy(df)
             last_close = float(df['Close'].iloc[-1])
             prev_close = float(df['Close'].iloc[-2])
             change_pct = ((last_close - prev_close) / prev_close) * 100
@@ -195,6 +196,9 @@ class UnifiedMarketProvider:
             return {
                 "symbol": symbol,
                 "price": round(last_close, 4 if "USD" in symbol or "=X" in symbol else 2),
+                "df_m5": float(df['ma5'].iloc[-1]),
+                "df_m20": float(df['ma20'].iloc[-1]),
+                "df_m80": float(df['ma80'].iloc[-1]),
                 "change_pct": round(change_pct, 2),
                 "volume": fmt_currency(vol_val),
                 "market_cap": fmt_currency(mcap) if mcap else "N/A",
@@ -206,6 +210,11 @@ class UnifiedMarketProvider:
                 "bbw_squeeze": bbw_res['is_squeeze'],
                 "bbw_status": bbw_res['status'],
                 "dist_ath_pct": round(dist_ath_pct, 2),
+                "rsi21_strat": rsi21_strat,
+                "rsi_polarity": rsi21_strat['polarity'],
+                "rsi_state": rsi21_strat['state'],
+                "rsi_sl": rsi21_strat['sl_price'],
+                "rsi_tp1": rsi21_strat['tp1_price'],
                 "regime": regime,
                 "state": state,
                 "is_near_signal": is_near_signal,

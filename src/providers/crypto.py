@@ -133,6 +133,7 @@ class BinanceCryptoProvider:
             df['bbw_min'] = bbw_res['min_lookback_series']
 
             regime, state = TechnicalIndicators.evaluate_regime_and_state(df)
+            rsi21_strat = TechnicalIndicators.evaluate_rsi21_polarity_strategy(df)
             
             prev_close = float(df['Close'].iloc[-2])
             change_pct = ((last_close - prev_close) / prev_close) * 100
@@ -158,6 +159,9 @@ class BinanceCryptoProvider:
             return {
                 "symbol": symbol,
                 "price": round(last_close, 4),
+                "df_m5": float(df['ma5'].iloc[-1]),
+                "df_m20": float(df['ma20'].iloc[-1]),
+                "df_m80": float(df['ma80'].iloc[-1]),
                 "change_pct": round(change_pct, 2),
                 "volume": fmt_currency(last_vol_usd),
                 "market_cap": fmt_currency(cap_val) if cap_val else "N/A",
@@ -169,6 +173,11 @@ class BinanceCryptoProvider:
                 "bbw_min": bbw_res['min_bbw'],
                 "bbw_squeeze": bbw_res['is_squeeze'],
                 "bbw_status": bbw_res['status'],
+                "rsi21_strat": rsi21_strat,
+                "rsi_polarity": rsi21_strat['polarity'],
+                "rsi_state": rsi21_strat['state'],
+                "rsi_sl": rsi21_strat['sl_price'],
+                "rsi_tp1": rsi21_strat['tp1_price'],
                 "regime": regime,
                 "state": state,
                 "is_near_signal": is_near_signal,
