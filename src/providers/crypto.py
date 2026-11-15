@@ -17,8 +17,12 @@ def fmt_currency(val: float) -> str:
         return f"${val/1e3:.2f}k"
     return f"${val:.2f}"
 
-# Exclusion des stablecoins qui polluent le screener technique
-STABLECOINS = {"USDT", "USDC", "USD1", "DAI", "FDUSD", "TUSD", "USDD", "USDE", "BUSD", "PYUSD"}
+# LISTE EXHAUSTIVE DES STABLECOINS À EXCLURE SYSTÉMATIQUEMENT
+STABLECOINS = {
+    "USDT", "USDC", "FDUSD", "USDE", "USD1", "DAI", "TUSD", "USDD", 
+    "PYUSD", "BUSD", "GUSD", "USDP", "FRAX", "LUSD", "USD0", "SUSD",
+    "USTC", "USDJ", "CUSD", "EURS", "EURC", "AEUR", "EURI", "WBTC", "BTCB"
+}
 
 _COINGECKO_TOP_CACHE = []
 
@@ -27,7 +31,8 @@ def get_top_cryptos_by_market_cap():
     if not _COINGECKO_TOP_CACHE:
         try:
             url = "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=150&page=1"
-            resp = requests.get(url, timeout=7).json()
+            headers = {'User-Agent': 'Mozilla/5.0'}
+            resp = requests.get(url, headers=headers, timeout=8).json()
             if isinstance(resp, list):
                 _COINGECKO_TOP_CACHE = resp
         except Exception:
@@ -42,7 +47,6 @@ class BinanceCryptoProvider:
         })
 
     def fetch_top_pairs(self, quote: str = "USDT", limit: int = 50) -> List[Dict[str, Any]]:
-        """Sélectionne les cryptos triées STRICTEMENT par Capitalisation Boursière décroissante"""
         try:
             self.exchange.load_markets()
             available_symbols = set(self.exchange.symbols)
@@ -52,8 +56,14 @@ class BinanceCryptoProvider:
             if cg_list:
                 for coin in cg_list:
                     base = coin['symbol'].upper()
-                    if base in STABLECOINS:
+                    # 1. Vérification par liste noire
+                    if base in STABLECOINS or base.startswith("USD") or base.endswith("USD"):
                         continue
+                    # 2. Vérification par nom
+                    c_name = coin.get("name", "").lower()
+                    if "usd" in c_name or "tether" in c_name or "stablecoin" in c_name:
+                        continue
+
                     pair = f"{base}/{quote}"
                     if pair in available_symbols:
                         selected_pairs.append({
@@ -65,15 +75,23 @@ class BinanceCryptoProvider:
                     if len(selected_pairs) >= limit:
                         break
 
-            # Fallback Binance si CoinGecko indisponible
+            # Fallback Binance si besoin
             if not selected_pairs:
                 tickers = self.exchange.fetch_tickers()
-                usdt_pairs = [
-                    {"symbol": sym, "name": sym.split('/')[0], "market_cap": 0, "ath": 0}
-                    for sym in tickers.keys() 
-                    if sym.endswith(f"/{quote}") and sym.split('/')[0] not in STABLECOINS
-                ]
-                selected_pairs = usdt_pairs[:limit]
+                for sym, t in tickers.items():
+                    if not sym.endswith(f"/{quote}"):
+                        continue
+                    base = sym.split('/')[0].upper()
+                    if base in STABLECOINS or base.startswith("USD") or base.endswith("USD"):
+                        continue
+                    selected_pairs.append({
+                        "symbol": sym,
+                        "name": base,
+                        "market_cap": 0,
+                        "ath": 0
+                    })
+                    if len(selected_pairs) >= limit:
+                        break
 
             return selected_pairs
         except Exception:
@@ -83,6 +101,10 @@ class BinanceCryptoProvider:
         try:
             if "/" not in symbol and symbol.endswith("USDT"):
                 symbol = f"{symbol[:-4]}/USDT"
+
+            base_coin = symbol.split('/')[0].upper()
+            if base_coin in STABLECOINS or base_coin.startswith("USD"):
+                return {}
                 
             ohlcv = self.exchange.fetch_ohlcv(symbol, timeframe=timeframe, limit=limit)
             if len(ohlcv) < 25:
@@ -96,6 +118,11 @@ class BinanceCryptoProvider:
             df['High'] = df['high']
             df['Low'] = df['low']
 
+            last_close = float(df['Close'].iloc[-1])
+            # Élimination des tokens pegged à 1$
+            if 0.985 <= last_close <= 1.015 and df['Close'].std() < 0.02:
+                return {}
+
             df['ma5'] = TechnicalIndicators.calculate_ema(df['Close'], span=5)
             df['ma20'] = TechnicalIndicators.calculate_ema(df['Close'], span=20)
             df['ma80'] = TechnicalIndicators.calculate_ema(df['Close'], span=80)
@@ -107,19 +134,15 @@ class BinanceCryptoProvider:
 
             regime, state = TechnicalIndicators.evaluate_regime_and_state(df)
             
-            last_close = float(df['Close'].iloc[-1])
             prev_close = float(df['Close'].iloc[-2])
             change_pct = ((last_close - prev_close) / prev_close) * 100
             last_vol_usd = float(df['volume'].iloc[-1]) * last_close
 
-            # Vrai ATH de marché
             ath_price = float(df['High'].max())
             dist_ath_pct = ((last_close - ath_price) / ath_price) * 100 if ath_price > 0 else 0.0
 
-            # Capitalisation boursière réelle
             cap_val = meta_info.get("market_cap", 0) if meta_info else 0
 
-            # Détection Pré-Signal MM80
             is_near_signal = False
             dist_to_signal = 0.0
             ma80_val = float(df['ma80'].iloc[-1])
@@ -138,7 +161,6 @@ class BinanceCryptoProvider:
                 "change_pct": round(change_pct, 2),
                 "volume": fmt_currency(last_vol_usd),
                 "market_cap": fmt_currency(cap_val) if cap_val else "N/A",
-                "raw_mcap": cap_val,
                 "ath_price": round(ath_price, 4),
                 "dist_ath_pct": round(dist_ath_pct, 2),
                 "rsi": round(float(df['rsi21'].iloc[-1]), 1),
