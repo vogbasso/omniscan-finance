@@ -108,24 +108,24 @@ class TechnicalIndicators:
     @staticmethod
     def evaluate_rsi21_polarity_strategy(df: pd.DataFrame) -> Dict[str, Any]:
         """
-        STRATÉGIE RSI 21 (PAOLO BASSO) - POLARITÉ PAR TRANSITION STRICTE DE ZONE :
-        - Le RSI quitte la Survente (<=30) et va en Surachat (>=70) -> Polarité = ACHETEUSE (BULL)
-        - Le RSI quitte le Surachat (>=70) et va en Survente (<=30) -> Polarité = VENDEUSE (BEAR)
-        - Entre les deux : conservation stricte de la polarité précédente (mémoire d'état)
-        - Trade 1 : SL = Plus bas lors du RSI <= 30
-        - Trade N+1 : Possible uniquement après retour à >= 70 puis pullback < 50
-        - SL Trade N = Plus bas du Trade N-1
-        - TP1 = 1:1, Long Only
+        STRATÉGIE RSI 21 (PAOLO BASSO) AVEC GESTION DYNAMIQUE ET SÉCURISÉE DES STOP LOSS :
+        - Polarité par bascule stricte 30 <-> 70
+        - Trade 1 : SL = Creux lors du RSI <= 30
+        - Trade N : SL = Creux du Trade N-1. Si l'entrée du Trade N est plus basse que ce creux,
+          le système remonte aux creux antérieurs (N-2, N-3... jusqu'au creux de survente)
+          pour trouver un niveau strictement sous le prix d'entrée.
         """
-        polarity = "POLARITY_BEAR"  # État initial par défaut
-        last_zone = None            # 'oversold' ou 'overbought'
+        polarity = "POLARITY_BEAR"
+        last_zone = None
         
         oversold_lowest_low = None
         current_pullback_lowest = None
         pullback_in_progress = False
         returned_to_overbought = False
 
-        previous_trade_low = None
+        # Historique des creux structurels du cycle acheteur en cours
+        structural_lows_history: List[float] = []
+
         trade_count = 0
         last_signal_event = None
         active_trade = None
@@ -141,35 +141,33 @@ class TechnicalIndicators:
             prev_m5 = float(df['ma5'].iloc[i-1]) if i > 0 else m5
             prev_m20 = float(df['ma20'].iloc[i-1]) if i > 0 else m20
 
-            # ----------------------------------------------------
-            # 1. BASCULATEUR PUR DE POLARITÉ (TRANSITION DE ZONE)
-            # ----------------------------------------------------
+            # 1. BASCULATEUR PUR DE POLARITÉ (30 <-> 70)
             if rsi <= 30:
-                # Si on venait de la zone de surachat -> Bascule en Polarité Vendeuse !
                 if last_zone == "overbought":
                     polarity = "POLARITY_BEAR"
-                    trade_count = 0              # Réinitialisation du cycle d'achat
+                    trade_count = 0
                     pullback_in_progress = False
                     returned_to_overbought = False
+                    structural_lows_history.clear()
 
                 last_zone = "oversold"
                 oversold_lowest_low = low if oversold_lowest_low is None else min(oversold_lowest_low, low)
 
             elif rsi >= 70:
-                # Si on venait de la zone de survente -> Bascule en Polarité Acheteuse !
                 if last_zone == "oversold":
                     polarity = "POLARITY_BULL"
-                    returned_to_overbought = True  # Autorise le Trade 1
+                    returned_to_overbought = True
+                    # Le premier creux structurel mémorisé est celui de la survente
+                    if oversold_lowest_low is not None:
+                        structural_lows_history = [oversold_lowest_low]
 
                 last_zone = "overbought"
                 if polarity == "POLARITY_BULL" and trade_count >= 1:
-                    returned_to_overbought = True  # Autorise le Trade suivant
+                    returned_to_overbought = True
 
-            # ----------------------------------------------------
-            # 2. GESTION DES ENTRÉES EN POLARITÉ ACHETEUSE
-            # ----------------------------------------------------
+            # 2. ENTRÉES ET CALCUL SÉCURISÉ DU STOP LOSS
             if polarity == "POLARITY_BULL":
-                # Pullback sous 50
+                # Respiration sous 50
                 if returned_to_overbought and rsi < 50:
                     if not pullback_in_progress:
                         pullback_in_progress = True
@@ -181,32 +179,50 @@ class TechnicalIndicators:
                 is_crossover = (prev_m5 <= prev_m20 and m5 > m20)
                 if pullback_in_progress and is_crossover:
                     trade_count += 1
+                    entry_price = close
                     
                     if trade_count == 1:
-                        sl = oversold_lowest_low if oversold_lowest_low is not None else low
+                        # Trade 1 : SL sur la survente originelle
+                        sl = oversold_lowest_low if (oversold_lowest_low is not None and oversold_lowest_low < entry_price) else (current_pullback_lowest if current_pullback_lowest and current_pullback_lowest < entry_price else low * 0.98)
                         t_type = "T1 (Post-Survente)"
                     else:
-                        sl = previous_trade_low if previous_trade_low is not None else (current_pullback_lowest if current_pullback_lowest is not None else low)
-                        t_type = f"T{trade_count} (SL Creux T{trade_count-1})"
+                        # Trade 2+ : Chercher le creux antérieur le plus récent qui est STRICTEMENT sous l'entrée
+                        sl = None
+                        # On parcourt l'historique des creux en remontant vers l'arrière
+                        for past_low in reversed(structural_lows_history):
+                            if past_low < entry_price:
+                                sl = past_low
+                                break
+                        
+                        # Si aucun creux antérieur n'est plus bas que l'entrée, on prend le creux actuel du pullback
+                        if sl is None:
+                            sl = current_pullback_lowest if (current_pullback_lowest and current_pullback_lowest < entry_price) else (low * 0.97)
 
-                    risk = close - sl
-                    tp1 = close + risk if risk > 0 else close * 1.05
+                        t_type = f"T{trade_count} (SL Adaptatif Sécurisé)"
 
-                    previous_trade_low = current_pullback_lowest if current_pullback_lowest is not None else low
+                    risk = entry_price - sl
+                    tp1 = entry_price + risk if risk > 0 else entry_price * 1.05
+
+                    # Enregistrement du creux de ce trade pour les futurs trades
+                    if current_pullback_lowest is not None:
+                        structural_lows_history.append(current_pullback_lowest)
+                    else:
+                        structural_lows_history.append(low)
+
                     pullback_in_progress = False
                     current_pullback_lowest = None
-                    returned_to_overbought = False  # Obligation de retourner à 70 avant le trade suivant
+                    returned_to_overbought = False
 
                     trade_signals_history.append({
                         "date": df.index[i],
-                        "price": close,
+                        "price": entry_price,
                         "sl": sl,
                         "tp1": tp1,
                         "label": f"T{trade_count}"
                     })
 
                     active_trade = {
-                        "entry": close,
+                        "entry": entry_price,
                         "sl": sl,
                         "tp1": tp1,
                         "trade_type": t_type
@@ -215,7 +231,6 @@ class TechnicalIndicators:
                     if i == n - 1:
                         last_signal_event = "signal_buy_fresh"
 
-        # Diagnostic de l'état actuel
         last_rsi = float(df['rsi21'].iloc[-1])
         if last_signal_event == "signal_buy_fresh" and active_trade:
             state = "STATE_FRESH_BUY"
