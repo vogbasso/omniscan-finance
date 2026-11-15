@@ -325,7 +325,7 @@ if results:
         active_bbw_min = df_chart.get('bbw320_min', df_chart.get('bbw_min')) if is_rsi_strategy else df_chart.get('bbw80_min', df_chart.get('bbw_min'))
 
         fig = make_subplots(
-            rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.03,
+            rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.06,
             row_heights=[0.55, 0.23, 0.22],
             subplot_titles=(
                 f"Chandeliers, MM (5 / 20 / {macro_name}) & Signaux d'Entrée — {selected_sym}",
@@ -397,19 +397,41 @@ if results:
             row=1, col=1
         )
 
-        # Repères visuels clairs des années sur l'axe du bas
+        # 1. ABSCISSE DE L'ÉTAGE 1 (PRIX) : Années affichées DIRECTEMENT sous les chandeliers
         fig.update_xaxes(
+            showticklabels=True,
+            tickformat="%Y",
+            dtick="M12",
+            tickfont=dict(color="#00d4ff", size=13, family="Arial Black"),
+            showgrid=True,
+            gridcolor="rgba(255, 255, 255, 0.18)",
+            gridwidth=1.5,
+            tickangle=0,
+            row=1, col=1
+        )
+
+        # 2. Étage 2 (RSI) : Grille verticale alignée
+        fig.update_xaxes(
+            showticklabels=False,
+            showgrid=True,
+            gridcolor="rgba(255, 255, 255, 0.12)",
+            gridwidth=1.5,
+            dtick="M12",
+            row=2, col=1
+        )
+
+        # 3. ABSCISSE DE L'ÉTAGE 3 (BBW) : Mois et Années détaillés tout en bas
+        fig.update_xaxes(
+            showticklabels=True,
             tickformat="%b %Y",
             dtick="M12",
+            tickfont=dict(color="#ffffff", size=11),
             showgrid=True,
-            gridcolor="rgba(255, 255, 255, 0.08)",
+            gridcolor="rgba(255, 255, 255, 0.18)",
+            gridwidth=1.5,
             tickangle=-25,
             row=3, col=1
         )
-
-        # Grille verticale sur les étages 1 et 2 pour aligner les années
-        fig.update_xaxes(showgrid=True, gridcolor="rgba(255, 255, 255, 0.05)", row=1, col=1)
-        fig.update_xaxes(showgrid=True, gridcolor="rgba(255, 255, 255, 0.05)", row=2, col=1)
 
         fig.update_yaxes(title_text="Prix ($)", row=1, col=1)
         fig.update_yaxes(title_text="RSI", range=[10, 90], row=2, col=1)
