@@ -74,7 +74,7 @@ def get_scanned_data(category: str, limit: int):
         provider = BinanceCryptoProvider()
         pairs = provider.fetch_top_pairs(limit=limit)
         for p in pairs:
-            data = provider.analyze_ticker(p['symbol'], timeframe="1w", limit=150)
+            data = provider.analyze_ticker(p['symbol'], timeframe="1w", limit=150, meta_info=p)
             if data:
                 data["name"] = p['symbol'].split('/')[0]
                 charts[data["symbol"]] = data.pop("df", None)
