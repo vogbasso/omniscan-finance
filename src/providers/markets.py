@@ -147,9 +147,24 @@ class UnifiedMarketProvider:
 
             vol_val = float(df['Volume'].iloc[-1]) * last_close if 'Volume' in df.columns else 0
 
+            # Détection de zone d'entrée
+            ma20 = float(df['ma20'].iloc[-1])
+            dist_ma20 = abs(last_close - ma20) / ma20 if ma20 else 1.0
+            is_entry_zone = False
+            entry_type = ""
+            
+            if state == "state_new_buy":
+                is_entry_zone = True
+                entry_type = "🔥 Signal Achat Déclenché"
+            elif regime == "regime_bull" and dist_ma20 <= 0.035 and last_close >= ma20:
+                is_entry_zone = True
+                entry_type = "🎯 Rebond Support MM20"
+
             return {
                 "symbol": symbol,
                 "price": round(last_close, 4 if "USD" in symbol or "=X" in symbol else 2),
+                "is_entry_zone": is_entry_zone,
+                "entry_type": entry_type,
                 "change_pct": round(change_pct, 2),
                 "volume": fmt_currency(vol_val),
                 "market_cap": fmt_currency(mcap) if mcap else "N/A",

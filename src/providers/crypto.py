@@ -1,4 +1,5 @@
 import ccxt
+import requests
 import pandas as pd
 from typing import List, Dict, Any
 from src.core.indicators import TechnicalIndicators
@@ -15,6 +16,21 @@ def fmt_currency(val: float) -> str:
     elif val >= 1e3:
         return f"${val/1e3:.2f}k"
     return f"${val:.2f}"
+
+# Cache des capitalisations cryptos
+_CRYPTO_CAP_CACHE = {}
+
+def get_crypto_market_caps():
+    global _CRYPTO_CAP_CACHE
+    if not _CRYPTO_CAP_CACHE:
+        try:
+            url = "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=100&page=1"
+            resp = requests.get(url, timeout=5).json()
+            for c in resp:
+                _CRYPTO_CAP_CACHE[c['symbol'].upper()] = c.get('market_cap', 0)
+        except Exception:
+            pass
+    return _CRYPTO_CAP_CACHE
 
 class BinanceCryptoProvider:
     def __init__(self):
@@ -62,18 +78,36 @@ class BinanceCryptoProvider:
             last_close = float(df['Close'].iloc[-1])
             prev_close = float(df['Close'].iloc[-2])
             change_pct = ((last_close - prev_close) / prev_close) * 100
-
-            # Volume en valeur sur la bougie
             last_vol_usd = float(df['volume'].iloc[-1]) * last_close
+
+            # Recherche de la Capitalisation via CoinGecko
+            base_coin = symbol.split('/')[0].upper()
+            caps = get_crypto_market_caps()
+            cap_val = caps.get(base_coin, 0)
+
+            # Détection d'opportunité d'entrée (Pullback sur MM20)
+            ma20 = float(df['ma20'].iloc[-1])
+            dist_ma20 = abs(last_close - ma20) / ma20
+            is_entry_zone = False
+            entry_type = ""
+            
+            if state == "state_new_buy":
+                is_entry_zone = True
+                entry_type = "🔥 Signal Achat Déclenché"
+            elif regime == "regime_bull" and dist_ma20 <= 0.04 and last_close >= ma20:
+                is_entry_zone = True
+                entry_type = "🎯 Rebond Support MM20"
 
             return {
                 "symbol": symbol,
                 "price": round(last_close, 4),
                 "change_pct": round(change_pct, 2),
                 "volume": fmt_currency(last_vol_usd),
-                "market_cap": "N/A (Crypto Spot)",
+                "market_cap": fmt_currency(cap_val) if cap_val else "N/A",
                 "regime": regime,
                 "state": state,
+                "is_entry_zone": is_entry_zone,
+                "entry_type": entry_type,
                 "df": df
             }
         except Exception:

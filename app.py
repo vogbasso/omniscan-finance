@@ -50,10 +50,7 @@ selected_category = st.sidebar.selectbox(
 
 scan_limit = st.sidebar.slider(
     "Nombre d'actifs à scanner" if lang_code == "fr" else "Number of assets to scan",
-    min_value=10,
-    max_value=100,
-    value=25,
-    step=5
+    min_value=10, max_value=100, value=25, step=5
 )
 
 st.sidebar.markdown("---")
@@ -132,8 +129,26 @@ if custom_search:
         fig_c.update_layout(title=f"Graphique Hebdomadaire (5/20/80) — {custom_search}", template="plotly_dark", height=430, xaxis_rangeslider_visible=False)
         st.plotly_chart(fig_c, use_container_width=True)
 
-# SYNTHÈSE & TABLEAU
+# 🎯 NOUVEAU : LE RADAR D'ENTRÉE EN POSITION
 if results:
+    opportunities = [r for r in results if r.get("is_entry_zone")]
+    
+    st.markdown("---")
+    st.subheader("🎯 " + ("RADAR SNIPER : ACTIFS À SURVEILLER POUR ENTRER EN POSITION" if lang_code == "fr" else "SNIPER RADAR : ASSETS READY FOR ENTRY"))
+    
+    if opportunities:
+        st.success(f"🔥 {len(opportunities)} opportunité(s) de timing détectée(s) sur ce marché !")
+        cols = st.columns(min(len(opportunities), 4))
+        for idx, opp in enumerate(opportunities[:4]):
+            with cols[idx]:
+                st.markdown(f"#### **{opp['name']}** ({opp['symbol']})")
+                st.write(f"**Prix** : `${opp['price']}`")
+                st.write(f"**Signal** : `{opp['entry_type']}`")
+                st.write(f"**Volume** : {opp['volume']}")
+    else:
+        st.info("ℹ️ Aucun actif n'est en zone de pullback immédiate sur cette sélection. Patience recommandée.")
+
+    # Synthèse générale
     st.markdown("---")
     bull_count = sum(1 for r in results if r["regime"] == "regime_bull")
     bear_count = sum(1 for r in results if r["regime"] == "regime_bear")
@@ -145,6 +160,7 @@ if results:
     k3.metric("🔴 Régime Vendeur", f"{bear_count} ({round(bear_count/len(results)*100)}%)")
     k4.metric("🚀 Tendances Fortes", strong_bull)
 
+    # Tableau général
     st.markdown("---")
     st.subheader("📋 " + ("Résultats Détaillés du Marché" if lang_code == "fr" else "Detailed Market Results"))
     search_f = st.text_input("🔎 Filtrer dans la liste :" if lang_code == "fr" else "Quick filter:", "").strip().upper()
@@ -155,6 +171,8 @@ if results:
             continue
         chg_val = r["change_pct"]
         chg_str = f"+{chg_val}%" if chg_val > 0 else f"{chg_val}%"
+        
+        statut_opp = r.get("entry_type", "") if r.get("is_entry_zone") else t.get(r["state"], r["state"])
         table_data.append({
             t["col_symbol"]: r["symbol"],
             t["col_name"]: r.get("name", r["symbol"]),
@@ -163,7 +181,7 @@ if results:
             t["col_volume"]: r["volume"],
             t["col_marketcap"]: r["market_cap"],
             t["col_regime"]: t.get(r["regime"], r["regime"]),
-            t["col_state"]: t.get(r["state"], r["state"])
+            "Opportunité / État": statut_opp
         })
     st.dataframe(pd.DataFrame(table_data), use_container_width=True, height=430)
 
