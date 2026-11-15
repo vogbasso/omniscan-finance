@@ -23,5 +23,8 @@
   "state_strong_bear": "🔻 Strong Bear Trend",
   "state_slowdown_bull": "⚠️ Bullish Slowdown",
   "state_slowdown_bear": "⚠️ Bearish Slowdown",
-  "state_consolidation": "⏳ Consolidation"
+  "state_consolidation": "⏳ Consolidation",
+  "col_change": "Weekly Chg (%)",
+  "col_volume": "Volume",
+  "col_marketcap": "Market Cap"
 }

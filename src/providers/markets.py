@@ -6,58 +6,29 @@ import pandas as pd
 from typing import List, Dict, Any
 from src.core.indicators import TechnicalIndicators
 
-MARKET_CATALOG = {
-    "stocks": [
-        {"symbol": "NVDA", "name": "Nvidia"},
-        {"symbol": "AAPL", "name": "Apple"},
-        {"symbol": "MSFT", "name": "Microsoft"},
-        {"symbol": "AMZN", "name": "Amazon"},
-        {"symbol": "GOOGL", "name": "Alphabet (Google)"},
-        {"symbol": "META", "name": "Meta Platforms"},
-        {"symbol": "TSLA", "name": "Tesla"},
-        {"symbol": "BRK-B", "name": "Berkshire Hathaway"},
-        {"symbol": "AVGO", "name": "Broadcom"},
-        {"symbol": "JPM", "name": "JPMorgan Chase"}
-    ],
-    "forex": [
-        {"symbol": "EURUSD=X", "name": "EUR / USD"},
-        {"symbol": "GBPUSD=X", "name": "GBP / USD"},
-        {"symbol": "USDJPY=X", "name": "USD / JPY"},
-        {"symbol": "USDCHF=X", "name": "USD / CHF"},
-        {"symbol": "AUDUSD=X", "name": "AUD / USD"},
-        {"symbol": "USDCAD=X", "name": "USD / CAD"},
-        {"symbol": "EURGBP=X", "name": "EUR / GBP"}
-    ],
-    "commodities": [
-        {"symbol": "GC=F", "name": "Or (Gold)"},
-        {"symbol": "SI=F", "name": "Argent (Silver)"},
-        {"symbol": "CL=F", "name": "Pétrole Brut WTI"},
-        {"symbol": "BZ=F", "name": "Pétrole Brent"},
-        {"symbol": "HG=F", "name": "Cuivre (Copper)"},
-        {"symbol": "NG=F", "name": "Gaz Naturel"}
-    ],
-    "indices": [
-        {"symbol": "^GSPC", "name": "S&P 500 (US)"},
-        {"symbol": "^IXIC", "name": "Nasdaq Composite"},
-        {"symbol": "^DJI", "name": "Dow Jones 30"},
-        {"symbol": "^FCHI", "name": "CAC 40 (France)"},
-        {"symbol": "^GDAXI", "name": "DAX 40 (Allemagne)"},
-        {"symbol": "^N225", "name": "Nikkei 225 (Japon)"}
-    ],
-    "etf": [
-        {"symbol": "SPY", "name": "SPDR S&P 500 ETF"},
-        {"symbol": "QQQ", "name": "Invesco QQQ (Nasdaq 100)"},
-        {"symbol": "SMH", "name": "VanEck Semiconductor ETF"},
-        {"symbol": "GLD", "name": "SPDR Gold Shares"},
-        {"symbol": "TLT", "name": "iShares 20+ Year Treasury"},
-        {"symbol": "IWM", "name": "iShares Russell 2000"}
-    ]
-}
+def fmt_currency(val: float) -> str:
+    if not val or val == 0:
+        return "N/A"
+    if val >= 1e12:
+        return f"${val/1e12:.2f}T"
+    elif val >= 1e9:
+        return f"${val/1e9:.2f}B"
+    elif val >= 1e6:
+        return f"${val/1e6:.2f}M"
+    elif val >= 1e3:
+        return f"${val/1e3:.2f}k"
+    return f"${val:.2f}"
+
+from src.providers.crypto import BinanceCryptoProvider
+
+# Catalogue étendu
+from src.providers.markets import MARKET_CATALOG
 
 class UnifiedMarketProvider:
     @staticmethod
-    def get_market_assets(category: str) -> List[Dict[str, str]]:
-        return MARKET_CATALOG.get(category, [])
+    def get_market_assets(category: str, limit: int = 50) -> List[Dict[str, str]]:
+        assets = MARKET_CATALOG.get(category, [])
+        return assets[:limit]
 
     @staticmethod
     def fetch_and_analyze(symbol: str, timeframe: str = '1wk', period: str = '2y') -> Dict[str, Any]:
@@ -73,11 +44,26 @@ class UnifiedMarketProvider:
             df['close'] = df['Close']
 
             regime, state = TechnicalIndicators.evaluate_regime_and_state(df)
-            last_price = float(df['Close'].iloc[-1])
+            last_close = float(df['Close'].iloc[-1])
+            prev_close = float(df['Close'].iloc[-2])
+            change_pct = ((last_close - prev_close) / prev_close) * 100
+
+            # Récupération du Market Cap ultra-rapide via fast_info
+            mcap = None
+            try:
+                mcap = ticker.fast_info.market_cap
+            except Exception:
+                mcap = None
+
+            # Volume en valeur sur la semaine
+            vol_val = float(df['Volume'].iloc[-1]) * last_close if 'Volume' in df.columns else 0
 
             return {
                 "symbol": symbol,
-                "price": round(last_price, 4 if "USD" in symbol else 2),
+                "price": round(last_close, 4 if "USD" in symbol or "=X" in symbol else 2),
+                "change_pct": round(change_pct, 2),
+                "volume": fmt_currency(vol_val),
+                "market_cap": fmt_currency(mcap) if mcap else "N/A",
                 "regime": regime,
                 "state": state,
                 "df": df

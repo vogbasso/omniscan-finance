@@ -23,5 +23,8 @@
   "state_strong_bear": "🔻 Tendance Forte Baisse",
   "state_slowdown_bull": "⚠️ Ralentissement Hausse",
   "state_slowdown_bear": "⚠️ Ralentissement Baisse",
-  "state_consolidation": "⏳ Consolidation"
+  "state_consolidation": "⏳ Consolidation",
+  "col_change": "Var. Hebdo (%)",
+  "col_volume": "Volume",
+  "col_marketcap": "Capitalisation"
 }
