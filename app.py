@@ -73,7 +73,7 @@ st.sidebar.info(f"⏱️ **Timeframe** : {timeframe_display}")
 
 if is_rsi_strategy:
     st.title("🌟 OmniScan Finance — Stratégie RSI 21 / Pullback 50 & MM 5-20")
-    st.caption("Polarité haussière (Survente $\le 30 ightarrow$ Surachat $\ge 70$) • Pullback sous 50 • Crossover MM 5/20 • Long Only")
+    st.caption("Polarité haussière (Survente <= 30 vers Surachat >= 70) • Pullback sous 50 • Crossover MM 5/20 • Long Only")
 else:
     st.title("📊 OmniScan Finance — Stratégie Triple MM 5 / 20 / 80")
     st.caption("Régime de fond avec mémoire d'état • Faisceau 5/20/80 • Compression Paolo BBW")
@@ -184,7 +184,7 @@ if results:
             elif r_state == "STATE_PULLBACK_50":
                 statut_str = "⏳ PULLBACK < 50"
             elif r_state == "STATE_OVERBOUGHT_IMPULSE":
-                statut_str = "🚀 IMPULSION (RSI ≥ 70)"
+                statut_str = "🚀 IMPULSION (RSI >= 70)"
             elif r_state == "STATE_BULLISH_TREND":
                 statut_str = "↗️ FLUX ACHETEUR"
             else:
@@ -248,9 +248,11 @@ if results:
     styler = df_display.style
     try:
         col_pol = "Polarité" if is_rsi_strategy else t["col_regime"]
-        styled_df = styler.map(style_change, subset=[t["col_change"]])\
-                          .map(style_polarity, subset=[col_pol])\
-                          .map(style_bbw, subset=["Paolo BBW (80)"])
+        styled_df = (
+            styler.map(style_change, subset=[t["col_change"]])
+            .map(style_polarity, subset=[col_pol])
+            .map(style_bbw, subset=["Paolo BBW (80)"])
+        )
         st.dataframe(styled_df, use_container_width=True, height=450)
     except Exception:
         st.dataframe(df_display, use_container_width=True, height=450)
@@ -266,7 +268,7 @@ if results:
             row_heights=[0.55, 0.23, 0.22],
             subplot_titles=(
                 f"Chandeliers & MM (5 / 20 / 80) — {selected_sym}",
-                "RSI (21) • Survente ≤ 30 | Zone Centrale 50 | Surachat ≥ 70",
+                "RSI (21) • Survente <= 30 | Zone Centrale 50 | Surachat >= 70",
                 "Paolo BBW % (Bandes 80) & Seuil Compression (Min Lookback)"
             )
         )
