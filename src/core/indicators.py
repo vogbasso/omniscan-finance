@@ -107,8 +107,9 @@ class TechnicalIndicators:
 
     @staticmethod
     def evaluate_rsi21_polarity_strategy(df: pd.DataFrame) -> Dict[str, Any]:
-        polarity = False
+        polarity = "POLARITY_NEUTRAL"  # POLARITY_BULL ou POLARITY_BEAR
         has_touched_oversold = False
+        has_touched_overbought = False
         oversold_lowest_low = None
         
         current_pullback_lowest = None
@@ -134,13 +135,25 @@ class TechnicalIndicators:
             if rsi <= 30:
                 has_touched_oversold = True
                 oversold_lowest_low = low if oversold_lowest_low is None else min(oversold_lowest_low, low)
+                # Bascule en Polarité Vendeuse si le cours venait d'un surachat
+                if has_touched_overbought and polarity == "POLARITY_BULL":
+                    polarity = "POLARITY_BEAR"
+                    has_touched_overbought = False
 
+            if rsi >= 70:
+                has_touched_overbought = True
+
+            # Bascule en Polarité Acheteuse (Cycle Survente -> Surachat)
             if has_touched_oversold and rsi >= 70:
-                polarity = True
+                polarity = "POLARITY_BULL"
                 has_touched_oversold = False
                 returned_to_overbought = True
 
-            if polarity:
+            # Casse du Stop Loss du trade actif -> Polarité devient Vendeuse
+            if active_trade and low < active_trade['sl']:
+                polarity = "POLARITY_BEAR"
+
+            if polarity == "POLARITY_BULL":
                 if trade_count >= 1 and rsi >= 70:
                     returned_to_overbought = True
 
@@ -202,7 +215,7 @@ class TechnicalIndicators:
             state = "STATE_WAIT_POLARITY"
 
         return {
-            "polarity": "POLARITY_BULL" if polarity else "POLARITY_WAIT",
+            "polarity": polarity if polarity in ["POLARITY_BULL", "POLARITY_BEAR"] else "POLARITY_BEAR",
             "state": state,
             "trade_count": trade_count,
             "sl_price": round(active_trade['sl'], 4) if active_trade else None,

@@ -155,8 +155,9 @@ if results:
     k1, k2, k3, k4 = st.columns(4)
     k1.metric("Actifs Scannés", len(results))
     bull_count = sum(1 for r in results if (r.get("rsi_polarity") == "POLARITY_BULL" if is_rsi_strategy else r.get("regime") == "regime_bull"))
+    bear_count = len(results) - bull_count
     k2.metric("🟢 Polarité Acheteuse" if is_rsi_strategy else "🟢 Régime Acheteur", f"{bull_count} ({round(bull_count/len(results)*100)}%)")
-    k3.metric("RSI Moyen", round(sum(r.get("rsi", 50) for r in results) / len(results), 1))
+    k3.metric("🔴 Polarité Vendeuse" if is_rsi_strategy else "🔴 Régime Vendeur", f"{bear_count} ({round(bear_count/len(results)*100)}%)")
     squeeze_count = sum(1 for r in results if r.get("bbw_squeeze"))
     k4.metric("⚡ Squeeze Paolo BBW", squeeze_count)
 
@@ -177,7 +178,12 @@ if results:
         bbw_str = f"⚡ {bbw_val:.1f}% (Squeeze)" if r.get("bbw_squeeze") else f"{bbw_val:.1f}%"
 
         if is_rsi_strategy:
-            polarity_label = "🟢 ACHETEUSE" if r.get("rsi_polarity") == "POLARITY_BULL" else "⚪ ATTENTE"
+            if r.get("rsi_polarity") == "POLARITY_BULL":
+                polarity_label = "🟢 ACHETEUSE"
+            elif r.get("rsi_polarity") == "POLARITY_BEAR":
+                polarity_label = "🔴 VENDEUSE"
+            else:
+                polarity_label = "⚪ NEUTRE"
             r_state = r.get("rsi_state", "")
             if r_state == "STATE_FRESH_BUY":
                 statut_str = f"🔥 {r.get('rsi21_strat', {}).get('trade_type', 'SIGNAL ACHAT')}"
@@ -231,7 +237,9 @@ if results:
 
     def style_polarity(val):
         if "ACHETEUSE" in str(val) or "ACHETEUR" in str(val):
-            return "background-color: rgba(0, 230, 118, 0.15); color: #00e676; font-weight: bold;"
+            return "background-color: rgba(0, 230, 118, 0.15); color: #00e676; font-weight: bold; border-left: 3px solid #00e676;"
+        elif "VENDEUSE" in str(val) or "VENDEUR" in str(val):
+            return "background-color: rgba(255, 82, 82, 0.15); color: #ff5252; font-weight: bold; border-left: 3px solid #ff5252;"
         return "color: #9e9e9e;"
 
     def style_signal(val):
