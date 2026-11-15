@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from typing import Tuple, Dict, Any
+from typing import Tuple, Dict, Any, List
 
 class TechnicalIndicators:
     @staticmethod
@@ -107,16 +107,6 @@ class TechnicalIndicators:
 
     @staticmethod
     def evaluate_rsi21_polarity_strategy(df: pd.DataFrame) -> Dict[str, Any]:
-        """
-        STRATÉGIE RSI 21 (PAOLO BASSO) :
-        - Polarité acheteuse validée après cycle Survente (<=30) -> Surachat (>=70)
-        - Trade 1 : SL = Creux lors du RSI <= 30
-        - Pour autoriser Trade N+1 : Le RSI DOIT impérativement retourner en Surachat (>=70)
-        - Puis pullback sous 50 (RSI < 50)
-        - Entrée sur croisement MM5 > MM20
-        - SL du Trade N = Creux du Trade N-1
-        - TP1 = 1:1, objectif retour >= 70
-        """
         polarity = False
         has_touched_oversold = False
         oversold_lowest_low = None
@@ -125,10 +115,11 @@ class TechnicalIndicators:
         pullback_in_progress = False
         returned_to_overbought = False
 
-        previous_trade_low = None  # Mémorise le creux du trade précédent pour le SL en cascade
+        previous_trade_low = None
         trade_count = 0
         last_signal_event = None
         active_trade = None
+        trade_signals_history = []  # Pour marquage direct sur le graphique Plotly
 
         n = len(df)
         for i in range(n):
@@ -140,23 +131,19 @@ class TechnicalIndicators:
             prev_m5 = float(df['ma5'].iloc[i-1]) if i > 0 else m5
             prev_m20 = float(df['ma20'].iloc[i-1]) if i > 0 else m20
 
-            # 1. Détection Survente initiale (Cycle 0)
             if rsi <= 30:
                 has_touched_oversold = True
                 oversold_lowest_low = low if oversold_lowest_low is None else min(oversold_lowest_low, low)
 
-            # 2. Validation Polarité Acheteuse (Survente -> Surachat)
             if has_touched_oversold and rsi >= 70:
                 polarity = True
                 has_touched_oversold = False
-                returned_to_overbought = True  # Autorise le Trade 1
+                returned_to_overbought = True
 
             if polarity:
-                # 3. Vérification du retour en surachat requis pour les trades suivants
                 if trade_count >= 1 and rsi >= 70:
                     returned_to_overbought = True
 
-                # 4. Phase de Pullback sous 50 (autorisée seulement si le retour à 70 a eu lieu)
                 if returned_to_overbought and rsi < 50:
                     if not pullback_in_progress:
                         pullback_in_progress = True
@@ -164,30 +151,33 @@ class TechnicalIndicators:
                     else:
                         current_pullback_lowest = min(current_pullback_lowest, low)
 
-                # 5. Déclencheur : Croisement MM5 > MM20
                 is_crossover = (prev_m5 <= prev_m20 and m5 > m20)
                 if pullback_in_progress and is_crossover:
                     trade_count += 1
                     
                     if trade_count == 1:
-                        # Règle Trade 1 : SL au plus bas de la survente originelle
                         sl = oversold_lowest_low if oversold_lowest_low is not None else low
-                        t_type = "Trade 1 (Post-Survente)"
+                        t_type = "T1 (Post-Survente)"
                     else:
-                        # Règle Trade 2+ : SL = Creux du Trade N-1 !
                         sl = previous_trade_low if previous_trade_low is not None else (current_pullback_lowest if current_pullback_lowest is not None else low)
-                        t_type = f"Trade {trade_count} (SL = Creux Trade {trade_count-1})"
+                        t_type = f"T{trade_count} (SL Creux T{trade_count-1})"
 
                     risk = close - sl
                     tp1 = close + risk if risk > 0 else close * 1.05
 
-                    # Enregistrement du creux du trade actuel qui deviendra le SL du prochain trade !
                     previous_trade_low = current_pullback_lowest if current_pullback_lowest is not None else low
-                    
-                    # Réinitialisation des verrous
                     pullback_in_progress = False
                     current_pullback_lowest = None
-                    returned_to_overbought = False  # DOIT impérativement remonter à 70 avant le trade suivant !
+                    returned_to_overbought = False
+
+                    # Enregistrement pour marquage graphique
+                    trade_signals_history.append({
+                        "date": df.index[i],
+                        "price": close,
+                        "sl": sl,
+                        "tp1": tp1,
+                        "label": f"T{trade_count}"
+                    })
 
                     active_trade = {
                         "entry": close,
@@ -199,7 +189,6 @@ class TechnicalIndicators:
                     if i == n - 1:
                         last_signal_event = "signal_buy_fresh"
 
-        # Diagnostic temps réel sur la dernière bougie
         last_rsi = float(df['rsi21'].iloc[-1])
         if last_signal_event == "signal_buy_fresh" and active_trade:
             state = "STATE_FRESH_BUY"
@@ -218,5 +207,6 @@ class TechnicalIndicators:
             "trade_count": trade_count,
             "sl_price": round(active_trade['sl'], 4) if active_trade else None,
             "tp1_price": round(active_trade['tp1'], 4) if active_trade else None,
-            "trade_type": active_trade['trade_type'] if active_trade else ""
+            "trade_type": active_trade['trade_type'] if active_trade else "",
+            "trade_signals_history": trade_signals_history
         }

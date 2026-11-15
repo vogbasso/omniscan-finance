@@ -149,6 +149,7 @@ class BinanceCryptoProvider:
                 "rsi_state": rsi21_strat['state'],
                 "rsi_sl": rsi21_strat['sl_price'],
                 "rsi_tp1": rsi21_strat['tp1_price'],
+                "trade_signals_history": rsi21_strat['trade_signals_history'],
                 "df": df
             }
         except Exception:

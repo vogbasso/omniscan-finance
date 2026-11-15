@@ -118,7 +118,7 @@ if results:
                 with cols1[idx]:
                     st.markdown(f"#### **{sig['name']}** ({sig['symbol']})")
                     st.write(f"**Prix** : `${sig['price']}`")
-                    st.write(f"**Type** : `{sig.get('rsi21_strat', {}).get('trade_type', 'Achat Long')}`")
+                    st.write(f"**Signal** : `🔥 {sig.get('rsi21_strat', {}).get('trade_type', 'Achat Long')}`")
                     st.write(f"**Stop Loss** : `${sig.get('rsi_sl')}`")
                     st.write(f"**Objectif TP1 (1:1)** : `${sig.get('rsi_tp1')}`")
         else:
@@ -127,14 +127,13 @@ if results:
         st.markdown("---")
         st.subheader("🔭 RADAR 2 : ZONE DE VEILLE (PULLBACK SOUS 50 EN COURS — ATTENTE DU CROISEMENT MM5/20)")
         if pullback_setups:
-            st.warning(f"👀 {len(pullback_setups)} actif(s) en respiration saine sous 50 (À l'affût du croisement MM 5 > 20) !")
+            st.warning(f"👀 {len(pullback_setups)} actif(s) en respiration sous 50 (À l'affût du croisement MM 5 > 20) !")
             cols2 = st.columns(min(len(pullback_setups), 4))
             for idx, pb in enumerate(pullback_setups[:4]):
                 with cols2[idx]:
                     st.markdown(f"#### **{pb['name']}** ({pb['symbol']})")
                     st.write(f"**Prix Actuel** : `${pb['price']}`")
                     st.write(f"**RSI (21)** : `{pb.get('rsi')} (< 50 Confirmé)`")
-                    st.write(f"**MM5** : `${round(pb.get('df_m5', pb.get('price')), 2)}` | **MM20** : `${round(pb.get('df_m20', pb.get('price')), 2)}`")
                     st.write(f"**Paolo BBW** : `{pb.get('bbw')}%`")
         else:
             st.info("ℹ️ Aucun actif actuellement en phase de pullback sous 50.")
@@ -161,6 +160,7 @@ if results:
     squeeze_count = sum(1 for r in results if r.get("bbw_squeeze"))
     k4.metric("⚡ Squeeze Paolo BBW", squeeze_count)
 
+    # TABLEAU SANS LES VALEURS BRUTES DES MM, AVEC FOCUS SIGNAUX
     st.markdown("---")
     st.subheader("📋 " + ("Résultats Détaillés du Marché" if lang_code == "fr" else "Detailed Market Results"))
     search_f = st.text_input("🔎 Filtrer dans la liste :", "").strip().upper()
@@ -180,10 +180,10 @@ if results:
             polarity_label = "🟢 ACHETEUSE" if r.get("rsi_polarity") == "POLARITY_BULL" else "⚪ ATTENTE"
             r_state = r.get("rsi_state", "")
             if r_state == "STATE_FRESH_BUY":
-                statut_str = "🔥 SIGNAL ACHAT ACTIF"
+                statut_str = f"🔥 {r.get('rsi21_strat', {}).get('trade_type', 'SIGNAL ACHAT')}"
             elif r_state == "STATE_PULLBACK_50":
                 statut_str = "⏳ PULLBACK < 50"
-            elif r_state == "STATE_OVERBOUGHT_IMPULSE":
+            elif r_state == "STATE_OVERBOUGHT_IMPULSE" or r_state == "STATE_OVERBOUGHT_READY":
                 statut_str = "🚀 IMPULSION (RSI >= 70)"
             elif r_state == "STATE_BULLISH_TREND":
                 statut_str = "↗️ FLUX ACHETEUR"
@@ -198,12 +198,9 @@ if results:
                 t["col_name"]: r.get("name", r["symbol"]),
                 t["col_price"]: f"${r['price']}",
                 t["col_change"]: chg_str,
-                "MM5": f"${r.get('df_m5', r['price']):.2f}",
-                "MM20": f"${r.get('df_m20', r['price']):.2f}",
-                "MM80": f"${r.get('df_m80', r['price']):.2f}",
                 "RSI (21)": rsi_display,
                 "Polarité": polarity_label,
-                "État Stratégie": statut_str,
+                "Signal Détecté": statut_str,
                 "Stop Loss": sl_str,
                 "TP1 (1:1)": tp1_str,
                 "Paolo BBW (80)": bbw_str,
@@ -215,12 +212,9 @@ if results:
                 t["col_name"]: r.get("name", r["symbol"]),
                 t["col_price"]: f"${r['price']}",
                 t["col_change"]: chg_str,
-                "MM5": f"${r.get('df_m5', r['price']):.2f}",
-                "MM20": f"${r.get('df_m20', r['price']):.2f}",
-                "MM80": f"${r.get('df_m80', r['price']):.2f}",
                 "RSI (21)": rsi_display,
                 t["col_regime"]: t.get(r["regime"], r["regime"]),
-                "État Stratégie": t.get(r["state"], r["state"]),
+                "Signal Détecté": t.get(r["state"], r["state"]),
                 "Paolo BBW (80)": bbw_str,
                 t["col_dist_ath"]: f"{r.get('dist_ath_pct', 0.0):.1f}%"
             }
@@ -240,6 +234,13 @@ if results:
             return "background-color: rgba(0, 230, 118, 0.15); color: #00e676; font-weight: bold;"
         return "color: #9e9e9e;"
 
+    def style_signal(val):
+        if "🔥" in str(val):
+            return "background-color: rgba(0, 230, 118, 0.25); color: #00e676; font-weight: bold; border-left: 3px solid #00e676;"
+        elif "⏳" in str(val):
+            return "background-color: rgba(255, 171, 0, 0.2); color: #ffab00; font-weight: bold;"
+        return ""
+
     def style_bbw(val):
         if "⚡" in str(val):
             return "background-color: rgba(30, 144, 255, 0.25); color: #1e90ff; font-weight: bold;"
@@ -251,41 +252,73 @@ if results:
         styled_df = (
             styler.map(style_change, subset=[t["col_change"]])
             .map(style_polarity, subset=[col_pol])
+            .map(style_signal, subset=["Signal Détecté"])
             .map(style_bbw, subset=["Paolo BBW (80)"])
         )
         st.dataframe(styled_df, use_container_width=True, height=450)
     except Exception:
         st.dataframe(df_display, use_container_width=True, height=450)
 
+    # GRAPHIQUE AVEC MARQUAGE VISUEL DES SIGNAUX D'ENTRÉE
     st.markdown("---")
-    st.subheader("📈 Inspecteur Technique : Chandeliers + RSI 21 (Niveau 50) + Paolo BBW")
+    st.subheader("📈 Inspecteur Technique : Chandeliers + Signaux d'Entrée ▲ + RSI 21 + Paolo BBW")
     selected_sym = st.selectbox("Sélectionnez un actif :", [r["symbol"] for r in results])
     df_chart = charts_cache.get(selected_sym)
+
+    # Récupération des signaux de l'actif sélectionné
+    active_asset = next((x for x in results if x["symbol"] == selected_sym), None)
+    trade_signals = active_asset.get("trade_signals_history", []) if active_asset else []
 
     if df_chart is not None and not df_chart.empty:
         fig = make_subplots(
             rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.03,
             row_heights=[0.55, 0.23, 0.22],
             subplot_titles=(
-                f"Chandeliers & MM (5 / 20 / 80) — {selected_sym}",
-                "RSI (21) • Survente <= 30 | Zone Centrale 50 | Surachat >= 70",
+                f"Chandeliers, MM (5 / 20 / 80) & Signaux d'Entrée — {selected_sym}",
+                "RSI (21) • Survente <= 30 | Pivot 50 | Surachat >= 70",
                 "Paolo BBW % (Bandes 80) & Seuil Compression (Min Lookback)"
             )
         )
+        
+        # 1. Chandeliers & MM
         fig.add_trace(go.Candlestick(x=df_chart.index, open=df_chart['Open'], high=df_chart['High'], low=df_chart['Low'], close=df_chart['Close'], name="Prix"), row=1, col=1)
         fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['ma5'], line=dict(color='#00d4ff', width=1.5), name='MM5'), row=1, col=1)
         fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['ma20'], line=dict(color='#ffaa00', width=2), name='MM20'), row=1, col=1)
         fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['ma80'], line=dict(color='#d000ff', width=2.5), name='MM80'), row=1, col=1)
 
+        # 2. MARQUAGE DES SIGNAUX D'ENTRÉE SUR LE GRAPHIQUE (▲ Vert Fluo)
+        if trade_signals:
+            sig_dates = [s['date'] for s in trade_signals if s['date'] in df_chart.index]
+            sig_prices = [df_chart.loc[d, 'Low'] * 0.98 for d in sig_dates]
+            sig_labels = [f"▲ {s['label']}" for s in trade_signals if s['date'] in df_chart.index]
+
+            fig.add_trace(go.Scatter(
+                x=sig_dates,
+                y=sig_prices,
+                mode="markers+text",
+                marker=dict(symbol="triangle-up", size=14, color="#00e676", line=dict(width=1.5, color="#ffffff")),
+                text=sig_labels,
+                textposition="bottom center",
+                textfont=dict(color="#00e676", size=12, family="Arial Black"),
+                name="Signal d'Entrée Achat"
+            ), row=1, col=1)
+
+        # 3. Lignes Stop Loss et TP1 si un trade actif existe
+        if active_asset and active_asset.get("rsi_sl") and active_asset.get("rsi_tp1"):
+            fig.add_hline(y=active_asset['rsi_sl'], line_dash="dash", line_color="#ff1744", annotation_text=f"SL: ${active_asset['rsi_sl']}", row=1, col=1)
+            fig.add_hline(y=active_asset['rsi_tp1'], line_dash="dash", line_color="#00e676", annotation_text=f"TP1 (1:1): ${active_asset['rsi_tp1']}", row=1, col=1)
+
+        # 4. RSI (21)
         fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['rsi21'], line=dict(color='#ffd600', width=2), name='RSI 21'), row=2, col=1)
         fig.add_hline(y=70, line_dash="dash", line_color="#ff5252", annotation_text="Surachat 70", row=2, col=1)
         fig.add_hline(y=50, line_dash="solid", line_color="#ffffff", annotation_text="Pivot 50 (Pullback)", row=2, col=1)
         fig.add_hline(y=30, line_dash="dash", line_color="#00e676", annotation_text="Survente 30", row=2, col=1)
 
+        # 5. Paolo BBW
         fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['bbw'], line=dict(color='#1e90ff', width=2), name='Paolo BBW %'), row=3, col=1)
         fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['bbw_min'], line=dict(color='#ff1744', width=1.5, dash='dot'), name='Seuil Compression (Min)'), row=3, col=1)
 
-        fig.update_layout(template="plotly_dark", height=820, xaxis_rangeslider_visible=False, margin=dict(l=40, r=40, t=50, b=30))
+        fig.update_layout(template="plotly_dark", height=840, xaxis_rangeslider_visible=False, margin=dict(l=40, r=40, t=50, b=30))
         fig.update_yaxes(title_text="Prix ($)", row=1, col=1)
         fig.update_yaxes(title_text="RSI", range=[10, 90], row=2, col=1)
         fig.update_yaxes(title_text="BBW %", row=3, col=1)
