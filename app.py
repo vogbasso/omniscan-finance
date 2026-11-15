@@ -18,6 +18,18 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# Injection de style CSS personnalisé
+st.markdown("""
+<style>
+    .metric-card {
+        background-color: #1e222d;
+        border-radius: 8px;
+        padding: 15px;
+        border-left: 4px solid #2962ff;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 def load_locale(lang: str = "fr"):
     with open(f"config/locales/{lang}.json", "r", encoding="utf-8") as f:
         return json.load(f)
@@ -91,7 +103,7 @@ def get_scanned_data(category: str, limit: int):
 with st.spinner("Analyse quantitative des flux..." if lang_code == "fr" else "Running quantitative scan..."):
     results, charts_cache = get_scanned_data(selected_category, scan_limit)
 
-# GESTION RECHERCHE CIBLÉE
+# RECHERCHE CIBLÉE
 if custom_search:
     st.markdown("---")
     st.markdown(f"### 🎯 Recherche Ciblée : `{custom_search}`")
@@ -112,8 +124,8 @@ if custom_search:
     if custom_data and custom_df is not None:
         c1, c2, c3, c4, c5 = st.columns(5)
         c1.metric("Prix Actuel", f"${custom_data['price']}")
-        chg_sign = "+" if custom_data['change_pct'] > 0 else ""
-        c2.metric("Var. Hebdo", f"{chg_sign}{custom_data['change_pct']}%")
+        chg = custom_data['change_pct']
+        c2.metric("Var. Hebdo", f"{'▲ +' if chg > 0 else '▼ '}{chg}%", delta=f"{chg}%")
         c3.metric("Volume Hebdo", custom_data['volume'])
         c4.metric("Capitalisation", custom_data['market_cap'])
         c5.metric("Tendance de Fond", t.get(custom_data['regime'], custom_data['regime']))
@@ -129,7 +141,7 @@ if custom_search:
         fig_c.update_layout(title=f"Graphique Hebdomadaire (5/20/80) — {custom_search}", template="plotly_dark", height=430, xaxis_rangeslider_visible=False)
         st.plotly_chart(fig_c, use_container_width=True)
 
-# 🎯 NOUVEAU : LE RADAR D'ENTRÉE EN POSITION
+# 🎯 RADAR D'ENTRÉE EN POSITION
 if results:
     opportunities = [r for r in results if r.get("is_entry_zone")]
     
@@ -137,7 +149,7 @@ if results:
     st.subheader("🎯 " + ("RADAR SNIPER : ACTIFS À SURVEILLER POUR ENTRER EN POSITION" if lang_code == "fr" else "SNIPER RADAR : ASSETS READY FOR ENTRY"))
     
     if opportunities:
-        st.success(f"🔥 {len(opportunities)} opportunité(s) de timing détectée(s) sur ce marché !")
+        st.success(f"🔥 {len(opportunities)} opportunité(s) de timing détectée(s) !")
         cols = st.columns(min(len(opportunities), 4))
         for idx, opp in enumerate(opportunities[:4]):
             with cols[idx]:
@@ -146,9 +158,8 @@ if results:
                 st.write(f"**Signal** : `{opp['entry_type']}`")
                 st.write(f"**Volume** : {opp['volume']}")
     else:
-        st.info("ℹ️ Aucun actif n'est en zone de pullback immédiate sur cette sélection. Patience recommandée.")
+        st.info("ℹ️ Aucun actif en zone de pullback immédiate sur cette sélection.")
 
-    # Synthèse générale
     st.markdown("---")
     bull_count = sum(1 for r in results if r["regime"] == "regime_bull")
     bear_count = sum(1 for r in results if r["regime"] == "regime_bear")
@@ -160,7 +171,7 @@ if results:
     k3.metric("🔴 Régime Vendeur", f"{bear_count} ({round(bear_count/len(results)*100)}%)")
     k4.metric("🚀 Tendances Fortes", strong_bull)
 
-    # Tableau général
+    # TABLEAU STYLISÉ
     st.markdown("---")
     st.subheader("📋 " + ("Résultats Détaillés du Marché" if lang_code == "fr" else "Detailed Market Results"))
     search_f = st.text_input("🔎 Filtrer dans la liste :" if lang_code == "fr" else "Quick filter:", "").strip().upper()
@@ -170,8 +181,13 @@ if results:
         if search_f and search_f not in r["symbol"] and search_f not in r.get("name", "").upper():
             continue
         chg_val = r["change_pct"]
-        chg_str = f"+{chg_val}%" if chg_val > 0 else f"{chg_val}%"
-        
+        if chg_val > 0:
+            chg_str = f"▲ +{chg_val:.2f}%"
+        elif chg_val < 0:
+            chg_str = f"▼ {chg_val:.2f}%"
+        else:
+            chg_str = "  0.00%"
+            
         statut_opp = r.get("entry_type", "") if r.get("is_entry_zone") else t.get(r["state"], r["state"])
         table_data.append({
             t["col_symbol"]: r["symbol"],
@@ -183,7 +199,33 @@ if results:
             t["col_regime"]: t.get(r["regime"], r["regime"]),
             "Opportunité / État": statut_opp
         })
-    st.dataframe(pd.DataFrame(table_data), use_container_width=True, height=430)
+
+    df_display = pd.DataFrame(table_data)
+
+    # Fonctions de style néon
+    def style_change_column(val):
+        if "▲" in str(val):
+            return 'background-color: rgba(0, 230, 118, 0.18); color: #00e676; font-weight: bold; border-radius: 4px;'
+        elif "▼" in str(val):
+            return 'background-color: rgba(255, 82, 82, 0.18); color: #ff5252; font-weight: bold; border-radius: 4px;'
+        return 'color: #9e9e9e;'
+
+    def style_regime_column(val):
+        if "ACHETEUR" in str(val) or "BULLISH" in str(val):
+            return 'background-color: rgba(0, 230, 118, 0.12); color: #00e676; font-weight: 600;'
+        elif "VENDEUR" in str(val) or "BEARISH" in str(val):
+            return 'background-color: rgba(255, 82, 82, 0.12); color: #ff5252; font-weight: 600;'
+        return ''
+
+    # Application du styler multi-version Pandas
+    styler = df_display.style
+    mapper = getattr(styler, "map", getattr(styler, "applymap", None))
+    
+    if mapper:
+        styled_df = styler.applymap(style_change_column, subset=[t["col_change"]]).applymap(style_regime_column, subset=[t["col_regime"]])
+        st.dataframe(styled_df, use_container_width=True, height=450)
+    else:
+        st.dataframe(df_display, use_container_width=True, height=450)
 
     # Inspecteur graphique
     st.markdown("---")
