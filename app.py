@@ -122,10 +122,18 @@ if custom_search:
 
 # RADAR D'ENTRÉE EN POSITION
 if results:
-    opportunities = [r for r in results if r.get("is_entry_zone") or r.get("bbw_squeeze")]
+    # FILTRE STRICT : Uniquement les actifs réellement PRÊTS pour un achat
+    opportunities = [
+        r for r in results 
+        if r.get("regime") == "regime_bull" and (
+            r.get("is_entry_zone") or 
+            r.get("state") == "state_new_buy" or 
+            r.get("bbw_squeeze")
+        )
+    ]
     
     st.markdown("---")
-    st.subheader("🎯 " + ("RADAR SNIPER : ACTIFS À SURVEILLER (TIMING & SQUEEZE)" if lang_code == "fr" else "SNIPER RADAR : TIMING & SQUEEZE SETUPS"))
+    st.subheader("🎯 " + ("RADAR SNIPER : ACTIFS 100% PRÊTS À L'ACHAT (FOND VERT EXCLUSIF)" if lang_code == "fr" else "SNIPER RADAR : 100% READY BUY SETUPS (BULL REGIME ONLY)"))
     
     if opportunities:
         st.success(f"🔥 {len(opportunities)} configuration(s) de timing / compression détectée(s) !")
@@ -154,7 +162,7 @@ if results:
                     bbw_badge = f"{bbw_val}% (⚪ Normal)"
                 st.write(f"**Paolo BBW** : `{bbw_badge}`")
     else:
-        st.info("ℹ️ Aucun actif en zone de pullback ou squeeze immédiat sur cette sélection.")
+        st.info("🛡️ Aucun actif n'offre actuellement de configuration d'achat à faible risque sur cette sélection. Discipline : Restez liquide et attendez l'alignement parfait.")
 
     st.markdown("---")
     bull_count = sum(1 for r in results if r["regime"] == "regime_bull")
