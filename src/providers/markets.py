@@ -84,10 +84,16 @@ class UnifiedMarketProvider:
 
             df['ma5'] = TechnicalIndicators.calculate_ema(df['Close'], span=5)
             df['ma20'] = TechnicalIndicators.calculate_ema(df['Close'], span=20)
+            df['ma80'] = TechnicalIndicators.calculate_ema(df['Close'], span=80)
             df['ma320'] = TechnicalIndicators.calculate_ema(df['Close'], span=320)
             df['rsi21'] = TechnicalIndicators.calculate_rsi(df['Close'], period=21)
 
-            bbw_res = TechnicalIndicators.calculate_paolo_bbw_compression(df, period=320, dev=2.0, lookback=52)
+            bbw80_res = TechnicalIndicators.calculate_paolo_bbw_compression(df, period=80, dev=2.0, lookback=52)
+            bbw320_res = TechnicalIndicators.calculate_paolo_bbw_compression(df, period=320, dev=2.0, lookback=52)
+            df['bbw80'] = bbw80_res['bbw_series']
+            df['bbw80_min'] = bbw80_res['min_lookback_series']
+            df['bbw320'] = bbw320_res['bbw_series']
+            df['bbw320_min'] = bbw320_res['min_lookback_series']
             df['bbw'] = bbw_res['bbw_series']
             df['bbw_min'] = bbw_res['min_lookback_series']
 
@@ -114,7 +120,12 @@ class UnifiedMarketProvider:
                 "price": round(last_close, 4 if ("USD" in symbol or "=X" in symbol) else 2),
                 "df_m5": float(df['ma5'].iloc[-1]),
                 "df_m20": float(df['ma20'].iloc[-1]),
+                "df_m80": float(df['ma80'].iloc[-1]),
                 "df_m320": float(df['ma320'].iloc[-1]),
+                "bbw80": bbw80_res['current_bbw'],
+                "bbw80_squeeze": bbw80_res['is_squeeze'],
+                "bbw320": bbw320_res['current_bbw'],
+                "bbw320_squeeze": bbw320_res['is_squeeze'],
                 "change_pct": round(change_pct, 2),
                 "volume": fmt_currency(vol_val),
                 "market_cap": fmt_currency(mcap) if mcap else "N/A",

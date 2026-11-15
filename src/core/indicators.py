@@ -32,10 +32,11 @@ class TechnicalIndicators:
             return "rsi_bearish"
 
     @staticmethod
-    def calculate_paolo_bbw_compression(df: pd.DataFrame, period: int = 320, dev: float = 2.0, lookback: int = 52) -> Dict[str, Any]:
-        """Paolo BBW calculé sur la MM320"""
+    def calculate_paolo_bbw_compression(df: pd.DataFrame, period: int = 80, dev: float = 2.0, lookback: int = 52) -> Dict[str, Any]:
+        """Calcul universel de Paolo BBW paramétrable (base 80 ou 320)"""
         close = df['Close'] if 'Close' in df.columns else df['close']
-        middle = df['ma320'] if 'ma320' in df.columns else close.ewm(span=period, adjust=False).mean()
+        ma_col = f"ma{period}"
+        middle = df[ma_col] if ma_col in df.columns else close.ewm(span=period, adjust=False).mean()
         rolling_std = close.rolling(window=min(period, len(close)), min_periods=25).std().fillna(close.std())
         
         upper = middle + (dev * rolling_std)
@@ -62,7 +63,8 @@ class TechnicalIndicators:
 
     @staticmethod
     def evaluate_regime_and_state(df: pd.DataFrame) -> Tuple[str, str]:
-        regime = "regime_bull" if df['ma20'].iloc[0] > df['ma320'].iloc[0] else "regime_bear"
+        """MÉTHODE 2 : STRATÉGIE TRIPLE MM STRICTEMENT SUR BASE 5 / 20 / 80"""
+        regime = "regime_bull" if df['ma20'].iloc[0] > df['ma80'].iloc[0] else "regime_bear"
         is_fresh_signal = False
         last_signal = None
         close_col = df['Close'] if 'Close' in df.columns else df['close']
@@ -71,16 +73,16 @@ class TechnicalIndicators:
             p = float(close_col.iloc[i])
             m5 = float(df['ma5'].iloc[i])
             m20 = float(df['ma20'].iloc[i])
-            m320 = float(df['ma320'].iloc[i])
+            m80 = float(df['ma80'].iloc[i])
 
-            if m20 > m320 and (p < m5 and p < m20 and p < m320):
+            if m20 > m80 and (p < m5 and p < m20 and p < m80):
                 if regime != "regime_bear":
                     regime = "regime_bear"
                     if i == len(df) - 1:
                         is_fresh_signal = True
                         last_signal = "state_new_sell"
 
-            elif m20 < m320 and (p > m5 and p > m20 and p > m320):
+            elif m20 < m80 and (p > m5 and p > m20 and p > m80):
                 if regime != "regime_bull":
                     regime = "regime_bull"
                     if i == len(df) - 1:
@@ -93,15 +95,15 @@ class TechnicalIndicators:
         last_p = float(close_col.iloc[-1])
         last_m5 = float(df['ma5'].iloc[-1])
         last_m20 = float(df['ma20'].iloc[-1])
-        last_m320 = float(df['ma320'].iloc[-1])
+        last_m80 = float(df['ma80'].iloc[-1])
 
-        if last_m5 > last_m20 > last_m320:
+        if last_m5 > last_m20 > last_m80:
             state = "state_strong_bull"
-        elif last_m5 < last_m20 < last_m320:
+        elif last_m5 < last_m20 < last_m80:
             state = "state_strong_bear"
-        elif last_m20 > last_m320 and (last_m320 < last_m5 < last_m20):
+        elif last_m20 > last_m80 and (last_m80 < last_m5 < last_m20):
             state = "state_slowdown_bull"
-        elif last_m20 < last_m320 and (last_m20 < last_m5 < last_m320):
+        elif last_m20 < last_m80 and (last_m20 < last_m5 < last_m80):
             state = "state_slowdown_bear"
         else:
             state = "state_consolidation"
@@ -110,6 +112,7 @@ class TechnicalIndicators:
 
     @staticmethod
     def evaluate_rsi21_polarity_strategy(df: pd.DataFrame) -> Dict[str, Any]:
+        """MÉTHODE 1 : STRATÉGIE RSI 21 SUR BASE MM 5, MM 20 ET MM 320"""
         polarity = "POLARITY_BEAR"
         for r in df['rsi21']:
             if r >= 70:
@@ -213,17 +216,16 @@ class TechnicalIndicators:
                     if i == n - 1:
                         last_signal_event = "signal_buy_fresh"
 
-        # DIAGNOSTIC EN TEMPS RÉEL SUR LA DERNIÈRE BOUGIE ACTUELLE (PRÉCIS ET SANS MÉMOIRE ERRONÉE)
         last_rsi = float(df['rsi21'].iloc[-1])
         if last_signal_event == "signal_buy_fresh" and active_trade:
             state = "STATE_FRESH_BUY"
         elif polarity == "POLARITY_BULL":
             if last_rsi >= 70:
-                state = "STATE_OVERBOUGHT_IMPULSE"  # UNIQUEMENT si le RSI est VRAIMENT >= 70 actuellement
+                state = "STATE_OVERBOUGHT_IMPULSE"
             elif last_rsi < 50:
-                state = "STATE_PULLBACK_50"         # Si le RSI est sous 50, c'est formellement un PULLBACK
+                state = "STATE_PULLBACK_50"
             else:
-                state = "STATE_BULLISH_TREND"       # Si le RSI est entre 50 et 70, c'est le FLUX ACHETEUR
+                state = "STATE_BULLISH_TREND"
         else:
             state = "STATE_BEARISH_REGIME"
 
