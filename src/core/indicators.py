@@ -36,7 +36,6 @@ class TechnicalIndicators:
         close = df['Close']
         middle = df['ma80'] if 'ma80' in df.columns else close.ewm(span=period, adjust=False).mean()
         rolling_std = close.rolling(window=period, min_periods=25).std().fillna(close.std())
-
         upper = middle + (dev * rolling_std)
         lower = middle - (dev * rolling_std)
         bbw_series = ((upper - lower) / middle.replace(0, 1e-9)) * 100.0
@@ -46,7 +45,6 @@ class TechnicalIndicators:
         last_bbw = float(bbw_series.iloc[-1])
         last_min = float(min_lookback_series.iloc[-1])
         is_squeeze = (last_bbw <= last_min * 1.08) or (last_bbw <= last_min)
-        
         prev_bbw = float(bbw_series.iloc[-2]) if len(bbw_series) > 1 else last_bbw
         is_expansion = (last_bbw > prev_bbw * 1.15) and not is_squeeze
         status = "bbw_squeeze" if is_squeeze else ("bbw_expansion" if is_expansion else "bbw_normal")
@@ -109,11 +107,25 @@ class TechnicalIndicators:
 
     @staticmethod
     def evaluate_rsi21_polarity_strategy(df: pd.DataFrame) -> Dict[str, Any]:
+        """
+        STRATÉGIE RSI 21 (PAOLO BASSO) :
+        - Polarité acheteuse validée après cycle Survente (<=30) -> Surachat (>=70)
+        - Trade 1 : SL = Creux lors du RSI <= 30
+        - Pour autoriser Trade N+1 : Le RSI DOIT impérativement retourner en Surachat (>=70)
+        - Puis pullback sous 50 (RSI < 50)
+        - Entrée sur croisement MM5 > MM20
+        - SL du Trade N = Creux du Trade N-1
+        - TP1 = 1:1, objectif retour >= 70
+        """
         polarity = False
         has_touched_oversold = False
         oversold_lowest_low = None
+        
         current_pullback_lowest = None
-        pullback_confirmed = False
+        pullback_in_progress = False
+        returned_to_overbought = False
+
+        previous_trade_low = None  # Mémorise le creux du trade précédent pour le SL en cascade
         trade_count = 0
         last_signal_event = None
         active_trade = None
@@ -128,37 +140,54 @@ class TechnicalIndicators:
             prev_m5 = float(df['ma5'].iloc[i-1]) if i > 0 else m5
             prev_m20 = float(df['ma20'].iloc[i-1]) if i > 0 else m20
 
+            # 1. Détection Survente initiale (Cycle 0)
             if rsi <= 30:
                 has_touched_oversold = True
                 oversold_lowest_low = low if oversold_lowest_low is None else min(oversold_lowest_low, low)
 
+            # 2. Validation Polarité Acheteuse (Survente -> Surachat)
             if has_touched_oversold and rsi >= 70:
                 polarity = True
                 has_touched_oversold = False
-                pullback_confirmed = False
+                returned_to_overbought = True  # Autorise le Trade 1
 
             if polarity:
-                if rsi < 50:
-                    if not pullback_confirmed:
-                        pullback_confirmed = True
+                # 3. Vérification du retour en surachat requis pour les trades suivants
+                if trade_count >= 1 and rsi >= 70:
+                    returned_to_overbought = True
+
+                # 4. Phase de Pullback sous 50 (autorisée seulement si le retour à 70 a eu lieu)
+                if returned_to_overbought and rsi < 50:
+                    if not pullback_in_progress:
+                        pullback_in_progress = True
                         current_pullback_lowest = low
                     else:
                         current_pullback_lowest = min(current_pullback_lowest, low)
 
+                # 5. Déclencheur : Croisement MM5 > MM20
                 is_crossover = (prev_m5 <= prev_m20 and m5 > m20)
-                if pullback_confirmed and is_crossover:
+                if pullback_in_progress and is_crossover:
                     trade_count += 1
+                    
                     if trade_count == 1:
+                        # Règle Trade 1 : SL au plus bas de la survente originelle
                         sl = oversold_lowest_low if oversold_lowest_low is not None else low
                         t_type = "Trade 1 (Post-Survente)"
                     else:
-                        sl = current_pullback_lowest if current_pullback_lowest is not None else low
-                        t_type = f"Trade {trade_count} (Post-Pullback < 50)"
+                        # Règle Trade 2+ : SL = Creux du Trade N-1 !
+                        sl = previous_trade_low if previous_trade_low is not None else (current_pullback_lowest if current_pullback_lowest is not None else low)
+                        t_type = f"Trade {trade_count} (SL = Creux Trade {trade_count-1})"
 
                     risk = close - sl
                     tp1 = close + risk if risk > 0 else close * 1.05
-                    pullback_confirmed = False
+
+                    # Enregistrement du creux du trade actuel qui deviendra le SL du prochain trade !
+                    previous_trade_low = current_pullback_lowest if current_pullback_lowest is not None else low
+                    
+                    # Réinitialisation des verrous
+                    pullback_in_progress = False
                     current_pullback_lowest = None
+                    returned_to_overbought = False  # DOIT impérativement remonter à 70 avant le trade suivant !
 
                     active_trade = {
                         "entry": close,
@@ -166,16 +195,18 @@ class TechnicalIndicators:
                         "tp1": tp1,
                         "trade_type": t_type
                     }
+
                     if i == n - 1:
                         last_signal_event = "signal_buy_fresh"
 
+        # Diagnostic temps réel sur la dernière bougie
         last_rsi = float(df['rsi21'].iloc[-1])
         if last_signal_event == "signal_buy_fresh" and active_trade:
             state = "STATE_FRESH_BUY"
-        elif polarity and pullback_confirmed:
+        elif polarity and pullback_in_progress:
             state = "STATE_PULLBACK_50"
-        elif polarity and last_rsi >= 70:
-            state = "STATE_OVERBOUGHT_IMPULSE"
+        elif polarity and returned_to_overbought:
+            state = "STATE_OVERBOUGHT_READY"
         elif polarity:
             state = "STATE_BULLISH_TREND"
         else:
