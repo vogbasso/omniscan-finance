@@ -122,18 +122,14 @@ if custom_search:
 
 # RADAR D'ENTRÉE EN POSITION
 if results:
-    # FILTRE STRICT : Uniquement les actifs réellement PRÊTS pour un achat
+    # FILTRE ULTRA-SNIPER : Uniquement les NOUVEAUX SIGNAUX D'ACHAT de la semaine
     opportunities = [
         r for r in results 
-        if r.get("regime") == "regime_bull" and (
-            r.get("is_entry_zone") or 
-            r.get("state") == "state_new_buy" or 
-            r.get("bbw_squeeze")
-        )
+        if r.get("state") == "state_new_buy"
     ]
     
     st.markdown("---")
-    st.subheader("🎯 " + ("RADAR SNIPER : ACTIFS 100% PRÊTS À L'ACHAT (FOND VERT EXCLUSIF)" if lang_code == "fr" else "SNIPER RADAR : 100% READY BUY SETUPS (BULL REGIME ONLY)"))
+    st.subheader("🎯 " + ("RADAR ULTRA-SNIPER : SIGNAUX D'ACHAT FRAIS (DÉCLENCHÉS CETTE SEMAINE)" if lang_code == "fr" else "ULTRA-SNIPER RADAR : FRESH BUY SIGNALS (TRIGGERED THIS WEEK)"))
     
     if opportunities:
         st.success(f"🔥 {len(opportunities)} configuration(s) de timing / compression détectée(s) !")
@@ -162,7 +158,7 @@ if results:
                     bbw_badge = f"{bbw_val}% (⚪ Normal)"
                 st.write(f"**Paolo BBW** : `{bbw_badge}`")
     else:
-        st.info("🛡️ Aucun actif n'offre actuellement de configuration d'achat à faible risque sur cette sélection. Discipline : Restez liquide et attendez l'alignement parfait.")
+        st.info("🛡️ Aucun signal d'achat frais déclenché cette semaine sur cette sélection. Les tendances antérieures se poursuivent. Règle d'or : Zéro FOMO, on attend le déclenchement chirurgical d'un nouveau cycle.")
 
     st.markdown("---")
     bull_count = sum(1 for r in results if r["regime"] == "regime_bull")
