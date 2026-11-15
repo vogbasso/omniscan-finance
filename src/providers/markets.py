@@ -169,6 +169,19 @@ class UnifiedMarketProvider:
             # Détection de zone d'entrée
             ma20 = float(df['ma20'].iloc[-1])
             dist_ma20 = abs(last_close - ma20) / ma20 if ma20 else 1.0
+            # Détection de Pré-Signal (Proche de la MM80)
+            is_near_signal = False
+            dist_to_signal = 0.0
+            ma80_val = float(df['ma80'].iloc[-1])
+            ma20_val = float(df['ma20'].iloc[-1])
+            ma5_val = float(df['ma5'].iloc[-1])
+            
+            if ma20_val < ma80_val and last_close > ma5_val and last_close > ma20_val and last_close < ma80_val:
+                gap_pct = ((ma80_val - last_close) / last_close) * 100
+                if gap_pct <= 3.5:
+                    is_near_signal = True
+                    dist_to_signal = round(gap_pct, 2)
+
             is_entry_zone = False
             entry_type = ""
             
@@ -195,6 +208,9 @@ class UnifiedMarketProvider:
                 "dist_ath_pct": round(dist_ath_pct, 2),
                 "regime": regime,
                 "state": state,
+                "is_near_signal": is_near_signal,
+                "dist_to_signal": dist_to_signal,
+                "trigger_price": round(ma80_val, 2),
                 "is_entry_zone": is_entry_zone,
                 "entry_type": entry_type,
                 "df": df

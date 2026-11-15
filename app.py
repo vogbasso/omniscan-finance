@@ -14,7 +14,7 @@ from src.providers.markets import UnifiedMarketProvider
 from src.core.indicators import TechnicalIndicators
 
 st.set_page_config(
-    page_title="OmniScan Finance - Grand Scan 5/20/80 & Paolo BBW",
+    page_title="OmniScan Finance - Grand Scan 5/20/80 & Radar Sniper",
     page_icon="📈",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -120,46 +120,45 @@ if custom_search:
         c5.metric("Distance ATH", f"{custom_data.get('dist_ath_pct', 0)}%")
         c6.metric("Tendance Fond", t.get(custom_data['regime'], custom_data['regime']))
 
-# RADAR D'ENTRÉE EN POSITION
+# 1. RADAR ULTRA-SNIPER : SIGNAUX D'ACHAT FRAIS
 if results:
-    # FILTRE ULTRA-SNIPER : Uniquement les NOUVEAUX SIGNAUX D'ACHAT de la semaine
-    opportunities = [
-        r for r in results 
-        if r.get("state") == "state_new_buy"
-    ]
-    
-    st.markdown("---")
-    st.subheader("🎯 " + ("RADAR ULTRA-SNIPER : SIGNAUX D'ACHAT FRAIS (DÉCLENCHÉS CETTE SEMAINE)" if lang_code == "fr" else "ULTRA-SNIPER RADAR : FRESH BUY SIGNALS (TRIGGERED THIS WEEK)"))
-    
-    if opportunities:
-        st.success(f"🔥 {len(opportunities)} configuration(s) de timing / compression détectée(s) !")
-        cols = st.columns(min(len(opportunities), 4))
-        for idx, opp in enumerate(opportunities[:4]):
-            with cols[idx]:
-                st.markdown(f"#### **{opp['name']}** ({opp['symbol']})")
-                st.write(f"**Prix** : `${opp['price']}`")
-                
-                # 1. Tendance de Fond (Régime)
-                reg_label = t.get(opp.get('regime', ''), opp.get('regime', ''))
-                st.write(f"**Fond** : {reg_label}")
-                
-                # 2. Timing MM 5/20/80 garanti (jamais vide)
-                timing_val = opp.get('entry_type')
-                if not timing_val:
-                    timing_val = t.get(opp.get('state', ''), opp.get('state', '⚪ Normal'))
-                st.write(f"**Timing MM** : `{timing_val}`")
-                
-                # 3. Paolo BBW 80 avec chiffres exacts
-                bbw_val = opp.get('bbw', 0.0)
-                bbw_min = opp.get('bbw_min', 0.0)
-                if opp.get('bbw_squeeze'):
-                    bbw_badge = f"⚡ SQUEEZE ({bbw_val}% | Min {bbw_min}%)"
-                else:
-                    bbw_badge = f"{bbw_val}% (⚪ Normal)"
-                st.write(f"**Paolo BBW** : `{bbw_badge}`")
-    else:
-        st.info("🛡️ Aucun signal d'achat frais déclenché cette semaine sur cette sélection. Les tendances antérieures se poursuivent. Règle d'or : Zéro FOMO, on attend le déclenchement chirurgical d'un nouveau cycle.")
+    fresh_signals = [r for r in results if r.get("state") == "state_new_buy"]
+    imminent_setups = [r for r in results if r.get("is_near_signal")]
 
+    st.markdown("---")
+    st.subheader("🎯 " + ("RADAR 1 : SIGNAUX D'ACHAT FRAIS (DÉCLENCHÉS CETTE SEMAINE)" if lang_code == "fr" else "RADAR 1 : FRESH BUY SIGNALS (TRIGGERED THIS WEEK)"))
+    
+    if fresh_signals:
+        st.success(f"🔥 ALERTE MAJEURE : {len(fresh_signals)} nouveau(x) signal(ux) d'achat validé(s) cette semaine !")
+        cols1 = st.columns(min(len(fresh_signals), 4))
+        for idx, sig in enumerate(fresh_signals[:4]):
+            with cols1[idx]:
+                st.markdown(f"#### **{sig['name']}** ({sig['symbol']})")
+                st.write(f"**Prix Actuel** : `${sig['price']}`")
+                st.write(f"**Signal** : `🔥 NOUVEAU CYCLE ACHAT`")
+                st.write(f"**RSI (21)** : `{sig.get('rsi')}`")
+                st.write(f"**Paolo BBW** : `{sig.get('bbw')}%`")
+    else:
+        st.info("🛡️ " + ("Aucun signal d'achat frais déclenché cette semaine sur cette sélection. Discipline : Zéro FOMO, les positions en cours courent." if lang_code == "fr" else "No fresh buy signals triggered this week on this selection."))
+
+    # 2. RADAR 2 : ZONE DE VEILLE / SIGNAUX IMMINENTS
+    st.markdown("---")
+    st.subheader("🔭 " + t.get("radar_watch_title", "ZONE DE VEILLE : SIGNAUX IMMINENTS (À MOINS DE 3% DE PERCER)"))
+
+    if imminent_setups:
+        st.warning(f"👀 {len(imminent_setups)} actif(s) en attaque directe de la MM80 (Pré-Signal de rupture) !")
+        cols2 = st.columns(min(len(imminent_setups), 4))
+        for idx, imm in enumerate(imminent_setups[:4]):
+            with cols2[idx]:
+                st.markdown(f"#### **{imm['name']}** ({imm['symbol']})")
+                st.write(f"**Prix Actuel** : `${imm['price']}`")
+                st.write(f"**Seuil MM80 (Cible)** : `${imm.get('trigger_price')}`")
+                st.write(f"**Écart manquant** : `À +{imm.get('dist_to_signal')}% du Breakout ⚡`")
+                st.write(f"**RSI (21)** : `{imm.get('rsi')}`")
+    else:
+        st.info("ℹ️ " + t.get("radar_watch_empty", "Aucun actif n'est en phase de pré-déclenchement immédiat sous sa MM80."))
+
+    # Synthèse générale
     st.markdown("---")
     bull_count = sum(1 for r in results if r["regime"] == "regime_bull")
     bear_count = sum(1 for r in results if r["regime"] == "regime_bear")
@@ -191,12 +190,17 @@ if results:
         rsi_zone_label = t.get(r.get("rsi_zone", "rsi_neutral"), "")
         rsi_display = f"{rsi_val} | {rsi_zone_label}"
 
-        # Affichage Paolo BBW
         bbw_val = r.get("bbw", 0.0)
         is_sq = r.get("bbw_squeeze", False)
         bbw_str = f"⚡ {bbw_val:.1f}% (Squeeze)" if is_sq else f"{bbw_val:.1f}%"
 
-        statut_opp = r.get("entry_type", "") if r.get("is_entry_zone") else t.get(r["state"], r["state"])
+        if r.get("is_near_signal"):
+            statut_opp = f"🔭 Imminent (+{r.get('dist_to_signal')}%)"
+        elif r.get("state") == "state_new_buy":
+            statut_opp = "🔥 NOUVEAU SIGNAL"
+        else:
+            statut_opp = t.get(r["state"], r["state"])
+
         table_data.append({
             t["col_symbol"]: r["symbol"],
             t["col_name"]: r.get("name", r["symbol"]),
@@ -248,7 +252,7 @@ if results:
     except Exception:
         st.dataframe(df_display, use_container_width=True, height=450)
 
-    # Inspecteur graphique à 3 étages (Prix MM, RSI 21, Paolo BBW MQL5)
+    # Inspecteur graphique à 3 étages
     st.markdown("---")
     st.subheader("📈 " + ("Inspecteur Technique : Chandeliers + RSI 21 + Paolo BBW MQL5" if lang_code == "fr" else "Technical Inspector: Candlestick + RSI 21 + Paolo BBW MQL5"))
     selected_sym = st.selectbox("Sélectionnez un actif à afficher :" if lang_code == "fr" else "Select asset to inspect:", [r["symbol"] for r in results])
@@ -261,7 +265,6 @@ if results:
             subplot_titles=(f"Chandeliers & MM (5 / 20 / 80) — {selected_sym}", "RSI (21)", "Paolo BBW % (Bandes 80) & Seuil Compression (Min Lookback)")
         )
 
-        # 1. Chandeliers & MM
         fig.add_trace(go.Candlestick(
             x=df_chart.index, open=df_chart['Open'], high=df_chart['High'],
             low=df_chart['Low'], close=df_chart['Close'], name="Prix"
@@ -270,7 +273,6 @@ if results:
         fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['ma20'], line=dict(color='#ffaa00', width=2), name='MM20'), row=1, col=1)
         fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['ma80'], line=dict(color='#d000ff', width=2.5), name='MM80'), row=1, col=1)
 
-        # 2. RSI (21)
         if 'rsi21' not in df_chart.columns:
             df_chart['rsi21'] = TechnicalIndicators.calculate_rsi(df_chart['Close'], period=21)
         fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['rsi21'], line=dict(color='#ffd600', width=2), name='RSI 21'), row=2, col=1)
@@ -279,21 +281,15 @@ if results:
         fig.add_hline(y=45, line_dash="dot", line_color="#9e9e9e", row=2, col=1)
         fig.add_hline(y=30, line_dash="dash", line_color="#00e676", row=2, col=1)
 
-        # 3. Paolo BBW % & Seuil Compression (Reproduction exacte du MQL5)
         if 'bbw' not in df_chart.columns or 'bbw_min' not in df_chart.columns:
             bbw_d = TechnicalIndicators.calculate_paolo_bbw_compression(df_chart, period=80, dev=2.0, lookback=52)
             df_chart['bbw'] = bbw_d['bbw_series']
             df_chart['bbw_min'] = bbw_d['min_lookback_series']
 
-        # Plot 1 MQL5 : DodgerBlue
         fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['bbw'], line=dict(color='#1e90ff', width=2), name='Paolo BBW %'), row=3, col=1)
-        # Plot 2 MQL5 : Red DOT (Seuil Compression Min)
         fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['bbw_min'], line=dict(color='#ff1744', width=1.5, dash='dot'), name='Seuil Compression (Min)'), row=3, col=1)
 
-        fig.update_layout(
-            template="plotly_dark", height=800, xaxis_rangeslider_visible=False,
-            margin=dict(l=40, r=40, t=50, b=30)
-        )
+        fig.update_layout(template="plotly_dark", height=800, xaxis_rangeslider_visible=False, margin=dict(l=40, r=40, t=50, b=30))
         fig.update_yaxes(title_text="Prix ($)", row=1, col=1)
         fig.update_yaxes(title_text="RSI", range=[10, 90], row=2, col=1)
         fig.update_yaxes(title_text="BBW %", row=3, col=1)
