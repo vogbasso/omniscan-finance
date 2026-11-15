@@ -134,9 +134,25 @@ if results:
             with cols[idx]:
                 st.markdown(f"#### **{opp['name']}** ({opp['symbol']})")
                 st.write(f"**Prix** : `${opp['price']}`")
-                st.write(f"**Timing MM** : `{opp.get('entry_type', opp.get('state'))}`")
-                bbw_badge = "⚡ SQUEEZE ACTIF" if opp.get('bbw_squeeze') else f"{opp.get('bbw', 0)}%"
-                st.write(f"**Paolo BBW (80)** : `{bbw_badge}`")
+                
+                # 1. Tendance de Fond (Régime)
+                reg_label = t.get(opp.get('regime', ''), opp.get('regime', ''))
+                st.write(f"**Fond** : {reg_label}")
+                
+                # 2. Timing MM 5/20/80 garanti (jamais vide)
+                timing_val = opp.get('entry_type')
+                if not timing_val:
+                    timing_val = t.get(opp.get('state', ''), opp.get('state', '⚪ Normal'))
+                st.write(f"**Timing MM** : `{timing_val}`")
+                
+                # 3. Paolo BBW 80 avec chiffres exacts
+                bbw_val = opp.get('bbw', 0.0)
+                bbw_min = opp.get('bbw_min', 0.0)
+                if opp.get('bbw_squeeze'):
+                    bbw_badge = f"⚡ SQUEEZE ({bbw_val}% | Min {bbw_min}%)"
+                else:
+                    bbw_badge = f"{bbw_val}% (⚪ Normal)"
+                st.write(f"**Paolo BBW** : `{bbw_badge}`")
     else:
         st.info("ℹ️ Aucun actif en zone de pullback ou squeeze immédiat sur cette sélection.")
 
