@@ -86,7 +86,7 @@ def get_scanned_data(category: str, limit: int):
         provider = BinanceCryptoProvider()
         pairs = provider.fetch_top_pairs(limit=limit)
         for p in pairs:
-            data = provider.analyze_ticker(p['symbol'], timeframe="1w", limit=250, meta_info=p)
+            data = provider.analyze_ticker(p['symbol'], timeframe="1w", limit=500, meta_info=p)
             if data:
                 data["name"] = p.get("name", p['symbol'].split('/')[0])
                 charts[data["symbol"]] = data.pop("df", None)
@@ -189,10 +189,10 @@ if results:
                 statut_str = f"🔥 {r.get('rsi21_strat', {}).get('trade_type', 'SIGNAL ACHAT')}"
             elif r_state == "STATE_PULLBACK_50":
                 statut_str = "⏳ PULLBACK < 50"
-            elif r_state == "STATE_OVERBOUGHT_IMPULSE" or r_state == "STATE_OVERBOUGHT_READY":
+            elif r_state == "STATE_OVERBOUGHT_IMPULSE":
                 statut_str = "🚀 IMPULSION (RSI >= 70)"
             elif r_state == "STATE_BULLISH_TREND":
-                statut_str = "↗️ FLUX ACHETEUR"
+                statut_str = "↗️ FLUX ACHETEUR (50-70)"
             else:
                 statut_str = "⚪ ATTENTE CYCLE"
 
@@ -211,7 +211,7 @@ if results:
                 "Signal Détecté": statut_str,
                 "Stop Loss": sl_str,
                 "TP1 (1:1)": tp1_str,
-                "Paolo BBW (80)": bbw_str,
+                "Paolo BBW (320)": bbw_str,
                 t["col_dist_ath"]: f"{r.get('dist_ath_pct', 0.0):.1f}%"
             }
         else:
@@ -225,7 +225,7 @@ if results:
                 "RSI (21)": rsi_display,
                 t["col_regime"]: t.get(r["regime"], r["regime"]),
                 "Signal Détecté": t.get(r["state"], r["state"]),
-                "Paolo BBW (80)": bbw_str,
+                "Paolo BBW (320)": bbw_str,
                 t["col_dist_ath"]: f"{r.get('dist_ath_pct', 0.0):.1f}%"
             }
         table_data.append(row)
@@ -265,7 +265,7 @@ if results:
             styler.map(style_change, subset=[t["col_change"]])
             .map(style_polarity, subset=[col_pol])
             .map(style_signal, subset=["Signal Détecté"])
-            .map(style_bbw, subset=["Paolo BBW (80)"])
+            .map(style_bbw, subset=["Paolo BBW (320)"])
         )
         st.dataframe(styled_df, use_container_width=True, height=450)
     except Exception:
@@ -286,9 +286,9 @@ if results:
             rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.03,
             row_heights=[0.55, 0.23, 0.22],
             subplot_titles=(
-                f"Chandeliers, MM (5 / 20 / 80) & Signaux d'Entrée — {selected_sym}",
+                f"Chandeliers, MM (5 / 20 / 320) & Signaux d'Entrée — {selected_sym}",
                 "RSI (21) • Survente <= 30 | Pivot 50 | Surachat >= 70",
-                "Paolo BBW % (Bandes 80) & Seuil Compression (Min Lookback)"
+                "Paolo BBW % (Bandes 320) & Seuil Compression (Min Lookback)"
             )
         )
         
@@ -296,7 +296,7 @@ if results:
         fig.add_trace(go.Candlestick(x=df_chart.index, open=df_chart['Open'], high=df_chart['High'], low=df_chart['Low'], close=df_chart['Close'], name="Prix"), row=1, col=1)
         fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['ma5'], line=dict(color='#00d4ff', width=1.5), name='MM5'), row=1, col=1)
         fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['ma20'], line=dict(color='#ffaa00', width=2), name='MM20'), row=1, col=1)
-        fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['ma80'], line=dict(color='#d000ff', width=2.5), name='MM80'), row=1, col=1)
+        fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['ma80'], line=dict(color='#d000ff', width=2.5), name='MM320'), row=1, col=1)
 
         # 2. MARQUAGE DES SIGNAUX D'ENTRÉE SUR LE GRAPHIQUE (▲ Vert Fluo)
         if trade_signals:

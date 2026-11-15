@@ -80,7 +80,7 @@ class BinanceCryptoProvider:
         except Exception:
             return []
 
-    def analyze_ticker(self, symbol: str, timeframe: str = '1w', limit: int = 350, meta_info: Dict[str, Any] = None) -> Dict[str, Any]:
+    def analyze_ticker(self, symbol: str, timeframe: str = '1w', limit: int = 500, meta_info: Dict[str, Any] = None) -> Dict[str, Any]:
         try:
             if "/" not in symbol and symbol.endswith("USDT"):
                 symbol = f"{symbol[:-4]}/USDT"
@@ -107,10 +107,10 @@ class BinanceCryptoProvider:
 
             df['ma5'] = TechnicalIndicators.calculate_ema(df['Close'], span=5)
             df['ma20'] = TechnicalIndicators.calculate_ema(df['Close'], span=20)
-            df['ma80'] = TechnicalIndicators.calculate_ema(df['Close'], span=80)
+            df['ma320'] = TechnicalIndicators.calculate_ema(df['Close'], span=320)
             df['rsi21'] = TechnicalIndicators.calculate_rsi(df['Close'], period=21)
 
-            bbw_res = TechnicalIndicators.calculate_paolo_bbw_compression(df, period=80, dev=2.0, lookback=52)
+            bbw_res = TechnicalIndicators.calculate_paolo_bbw_compression(df, period=320, dev=2.0, lookback=52)
             df['bbw'] = bbw_res['bbw_series']
             df['bbw_min'] = bbw_res['min_lookback_series']
 
@@ -130,7 +130,7 @@ class BinanceCryptoProvider:
                 "price": round(last_close, 4),
                 "df_m5": float(df['ma5'].iloc[-1]),
                 "df_m20": float(df['ma20'].iloc[-1]),
-                "df_m80": float(df['ma80'].iloc[-1]),
+                "df_m320": float(df['ma320'].iloc[-1]),
                 "change_pct": round(change_pct, 2),
                 "volume": fmt_currency(last_vol_usd),
                 "market_cap": fmt_currency(cap_val) if cap_val else "N/A",
