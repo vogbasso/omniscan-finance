@@ -107,11 +107,20 @@ class TechnicalIndicators:
 
     @staticmethod
     def evaluate_rsi21_polarity_strategy(df: pd.DataFrame) -> Dict[str, Any]:
-        polarity = "POLARITY_NEUTRAL"  # POLARITY_BULL ou POLARITY_BEAR
-        has_touched_oversold = False
-        has_touched_overbought = False
-        oversold_lowest_low = None
+        """
+        STRATÉGIE RSI 21 (PAOLO BASSO) - POLARITÉ PAR TRANSITION STRICTE DE ZONE :
+        - Le RSI quitte la Survente (<=30) et va en Surachat (>=70) -> Polarité = ACHETEUSE (BULL)
+        - Le RSI quitte le Surachat (>=70) et va en Survente (<=30) -> Polarité = VENDEUSE (BEAR)
+        - Entre les deux : conservation stricte de la polarité précédente (mémoire d'état)
+        - Trade 1 : SL = Plus bas lors du RSI <= 30
+        - Trade N+1 : Possible uniquement après retour à >= 70 puis pullback < 50
+        - SL Trade N = Plus bas du Trade N-1
+        - TP1 = 1:1, Long Only
+        """
+        polarity = "POLARITY_BEAR"  # État initial par défaut
+        last_zone = None            # 'oversold' ou 'overbought'
         
+        oversold_lowest_low = None
         current_pullback_lowest = None
         pullback_in_progress = False
         returned_to_overbought = False
@@ -120,7 +129,7 @@ class TechnicalIndicators:
         trade_count = 0
         last_signal_event = None
         active_trade = None
-        trade_signals_history = []  # Pour marquage direct sur le graphique Plotly
+        trade_signals_history = []
 
         n = len(df)
         for i in range(n):
@@ -132,31 +141,35 @@ class TechnicalIndicators:
             prev_m5 = float(df['ma5'].iloc[i-1]) if i > 0 else m5
             prev_m20 = float(df['ma20'].iloc[i-1]) if i > 0 else m20
 
+            # ----------------------------------------------------
+            # 1. BASCULATEUR PUR DE POLARITÉ (TRANSITION DE ZONE)
+            # ----------------------------------------------------
             if rsi <= 30:
-                has_touched_oversold = True
-                oversold_lowest_low = low if oversold_lowest_low is None else min(oversold_lowest_low, low)
-                # Bascule en Polarité Vendeuse si le cours venait d'un surachat
-                if has_touched_overbought and polarity == "POLARITY_BULL":
+                # Si on venait de la zone de surachat -> Bascule en Polarité Vendeuse !
+                if last_zone == "overbought":
                     polarity = "POLARITY_BEAR"
-                    has_touched_overbought = False
+                    trade_count = 0              # Réinitialisation du cycle d'achat
+                    pullback_in_progress = False
+                    returned_to_overbought = False
 
-            if rsi >= 70:
-                has_touched_overbought = True
+                last_zone = "oversold"
+                oversold_lowest_low = low if oversold_lowest_low is None else min(oversold_lowest_low, low)
 
-            # Bascule en Polarité Acheteuse (Cycle Survente -> Surachat)
-            if has_touched_oversold and rsi >= 70:
-                polarity = "POLARITY_BULL"
-                has_touched_oversold = False
-                returned_to_overbought = True
+            elif rsi >= 70:
+                # Si on venait de la zone de survente -> Bascule en Polarité Acheteuse !
+                if last_zone == "oversold":
+                    polarity = "POLARITY_BULL"
+                    returned_to_overbought = True  # Autorise le Trade 1
 
-            # Casse du Stop Loss du trade actif -> Polarité devient Vendeuse
-            if active_trade and low < active_trade['sl']:
-                polarity = "POLARITY_BEAR"
+                last_zone = "overbought"
+                if polarity == "POLARITY_BULL" and trade_count >= 1:
+                    returned_to_overbought = True  # Autorise le Trade suivant
 
+            # ----------------------------------------------------
+            # 2. GESTION DES ENTRÉES EN POLARITÉ ACHETEUSE
+            # ----------------------------------------------------
             if polarity == "POLARITY_BULL":
-                if trade_count >= 1 and rsi >= 70:
-                    returned_to_overbought = True
-
+                # Pullback sous 50
                 if returned_to_overbought and rsi < 50:
                     if not pullback_in_progress:
                         pullback_in_progress = True
@@ -164,6 +177,7 @@ class TechnicalIndicators:
                     else:
                         current_pullback_lowest = min(current_pullback_lowest, low)
 
+                # Déclencheur croisement MM5 > MM20
                 is_crossover = (prev_m5 <= prev_m20 and m5 > m20)
                 if pullback_in_progress and is_crossover:
                     trade_count += 1
@@ -181,9 +195,8 @@ class TechnicalIndicators:
                     previous_trade_low = current_pullback_lowest if current_pullback_lowest is not None else low
                     pullback_in_progress = False
                     current_pullback_lowest = None
-                    returned_to_overbought = False
+                    returned_to_overbought = False  # Obligation de retourner à 70 avant le trade suivant
 
-                    # Enregistrement pour marquage graphique
                     trade_signals_history.append({
                         "date": df.index[i],
                         "price": close,
@@ -202,20 +215,21 @@ class TechnicalIndicators:
                     if i == n - 1:
                         last_signal_event = "signal_buy_fresh"
 
+        # Diagnostic de l'état actuel
         last_rsi = float(df['rsi21'].iloc[-1])
         if last_signal_event == "signal_buy_fresh" and active_trade:
             state = "STATE_FRESH_BUY"
-        elif polarity and pullback_in_progress:
+        elif polarity == "POLARITY_BULL" and pullback_in_progress:
             state = "STATE_PULLBACK_50"
-        elif polarity and returned_to_overbought:
+        elif polarity == "POLARITY_BULL" and returned_to_overbought:
             state = "STATE_OVERBOUGHT_READY"
-        elif polarity:
+        elif polarity == "POLARITY_BULL":
             state = "STATE_BULLISH_TREND"
         else:
-            state = "STATE_WAIT_POLARITY"
+            state = "STATE_BEARISH_REGIME"
 
         return {
-            "polarity": polarity if polarity in ["POLARITY_BULL", "POLARITY_BEAR"] else "POLARITY_BEAR",
+            "polarity": polarity,
             "state": state,
             "trade_count": trade_count,
             "sl_price": round(active_trade['sl'], 4) if active_trade else None,
