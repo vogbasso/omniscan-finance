@@ -140,6 +140,7 @@ class TechnicalIndicators:
         n = len(df)
         for i in range(n):
             rsi = float(df['rsi21'].iloc[i])
+            prev_rsi = float(df['rsi21'].iloc[i-1]) if i > 0 else 50.0
             low = float(low_col.iloc[i])
             close = float(close_col.iloc[i])
             m5 = float(df['ma5'].iloc[i])
@@ -153,7 +154,10 @@ class TechnicalIndicators:
                 pullback_in_progress = False
                 returned_to_overbought = False
                 structural_lows_history.clear()
-                oversold_lowest_low = low if oversold_lowest_low is None else min(oversold_lowest_low, low)
+                if oversold_lowest_low is None or prev_rsi > 30:
+                    oversold_lowest_low = low
+                else:
+                    oversold_lowest_low = min(oversold_lowest_low, low)
 
             elif rsi >= 70:
                 polarity = "POLARITY_BULL"
