@@ -128,6 +128,9 @@ class TechnicalIndicators:
         pullback_in_progress = False
         returned_to_overbought = False
         structural_lows_history: List[float] = []
+        in_overbought = False
+        interval_low = None
+        trade_in_interval = False
 
         trade_count = 0
         last_signal_event = None
@@ -148,12 +151,25 @@ class TechnicalIndicators:
             prev_m5 = float(df['ma5'].iloc[i-1]) if i > 0 else m5
             prev_m20 = float(df['ma20'].iloc[i-1]) if i > 0 else m20
 
+            if rsi >= 70:
+                if not in_overbought:
+                    if trade_in_interval and interval_low is not None:
+                        structural_lows_history.append(interval_low)
+                    trade_in_interval = False
+                    in_overbought = True
+                interval_low = None
+            else:
+                in_overbought = False
+                interval_low = low if interval_low is None else min(interval_low, low)
+
             if rsi <= 30:
                 polarity = "POLARITY_BEAR"
                 trade_count = 0
                 pullback_in_progress = False
                 returned_to_overbought = False
                 structural_lows_history.clear()
+                trade_in_interval = False
+                interval_low = None
                 if oversold_lowest_low is None or prev_rsi > 30:
                     oversold_lowest_low = low
                 else:
@@ -195,10 +211,7 @@ class TechnicalIndicators:
                     risk = entry_price - sl
                     tp1 = entry_price + risk if risk > 0 else entry_price * 1.05
 
-                    if current_pullback_lowest is not None:
-                        structural_lows_history.append(current_pullback_lowest)
-                    else:
-                        structural_lows_history.append(low)
+                    trade_in_interval = True
 
                     pullback_in_progress = False
                     current_pullback_lowest = None
