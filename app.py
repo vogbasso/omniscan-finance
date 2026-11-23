@@ -289,20 +289,20 @@ if results:
             tp2_str = f"${r.get('impulse_tp2')}" if r.get('impulse_tp2') else "—"
 
             row = {
-                t["col_symbol"]: r["symbol"],
-                t["col_name"]: r.get("name", r["symbol"]),
-                t["col_price"]: f"${r['price']}",
-                t["col_change"]: chg_str,
-                "Capitalisation": r.get("market_cap", "N/A"),
-                "RSI (21)": rsi_display,
-                "Tendance Macro": macro_trend_label,
-                "Signal Détecté": statut_str,
-                "Stop Loss (Bas Bear)": sl_str,
-                "TP1 (50% @ 1:1)": tp1_str,
-                "TP2 (35% @ 1:3)": tp2_str,
-                "Trailing (15%)": "Jusqu'à 20 < 320",
-                "Paolo BBW (320)": bbw_str,
-                t["col_dist_ath"]: f"{r.get('dist_ath_pct', 0.0):.1f}%"
+                "Symbole": r["symbol"],
+                "Actif": r.get("name", r["symbol"]),
+                "Prix": f"${r['price']}",
+                "Var %": chg_str,
+                "Market Cap": r.get("market_cap", "N/A"),
+                "RSI 21": rsi_display,
+                "Tendance": macro_trend_label,
+                "Signal": statut_str,
+                "Stop Loss": sl_str,
+                "TP1 (1:1)": tp1_str,
+                "TP2 (1:3)": tp2_str,
+                "Trailing": "Jusqu'à 20 < 320",
+                "BBW 320": bbw_str,
+                "Dist. ATH": f"{r.get('dist_ath_pct', 0.0):.1f}%"
             }
         elif is_pullback50_strategy:
             polarity_label = "🟢 ACHETEUSE" if r.get("rsi_polarity") == "POLARITY_BULL" else "🔴 VENDEUSE"
@@ -378,18 +378,26 @@ if results:
 
     styler = df_display.style
     try:
-        col_macro = "Tendance Macro" if is_impulse_strategy else ("Polarité" if is_pullback50_strategy else t["col_regime"])
-        col_bbw = "Paolo BBW (320)" if not is_cloud_strategy else "Paolo BBW (80)"
+        col_change_key = "Var %" if is_impulse_strategy else t["col_change"]
+        col_macro = "Tendance" if is_impulse_strategy else ("Polarité" if is_pullback50_strategy else t["col_regime"])
+        col_signal_key = "Signal" if is_impulse_strategy else "Signal Détecté"
+        col_rsi_key = "RSI 21" if is_impulse_strategy else "RSI (21)"
+        col_bbw = "BBW 320" if is_impulse_strategy else ("Paolo BBW (320)" if not is_cloud_strategy else "Paolo BBW (80)")
+        
+        # Hauteur dynamique parfaite : affiche TOUTES les lignes sans barre de défilement vertical
+        dynamic_height = min(1500, (len(df_display) + 1) * 37 + 5)
+        
         styled_df = (
-            styler.map(style_change, subset=[t["col_change"]])
+            styler.map(style_change, subset=[col_change_key])
             .map(style_macro, subset=[col_macro])
-            .map(style_signal, subset=["Signal Détecté"])
-            .map(style_rsi_col, subset=["RSI (21)"])
+            .map(style_signal, subset=[col_signal_key])
+            .map(style_rsi_col, subset=[col_rsi_key])
             .map(style_bbw, subset=[col_bbw])
         )
-        st.dataframe(styled_df, use_container_width=True, height=450)
+        st.dataframe(styled_df, use_container_width=True, height=dynamic_height)
     except Exception:
-        st.dataframe(df_display, use_container_width=True, height=450)
+        dynamic_height = min(1500, (len(df_display) + 1) * 37 + 5)
+        st.dataframe(df_display, use_container_width=True, height=dynamic_height)
 
     # ----------------------------------------------------
     # 3. INSPECTEUR GRAPHIQUE INTERACTIF (3 ÉTAGES HERMÉTIQUES)
