@@ -391,10 +391,10 @@ if results:
     except Exception:
         st.dataframe(df_display, use_container_width=True, height=450)
 
-    # 3. INSPECTEUR GRAPHIQUE INTERACTIF
+    # 3. INSPECTEUR GRAPHIQUE INTERACTIF PROFESSIONNEL (3 ÉTAGES DÉCOUPLÉS)
     st.markdown("---")
     macro_name = "SMA 320" if not is_cloud_strategy else "SMA 80"
-    st.subheader(f"📈 Inspecteur Technique : Chandeliers + SMA 20 + {macro_name} + RSI 21 + Niveaux TP/SL")
+    st.subheader(f"📈 Inspecteur Technique : Chandeliers + SMA 20 + {macro_name} + Oscillateur RSI (21)")
     selected_sym = st.selectbox("Sélectionnez un actif :", [r["symbol"] for r in results])
     df_chart = charts_cache.get(selected_sym)
 
@@ -407,12 +407,17 @@ if results:
             trade_signals = active_asset.get("trade_signals_history", [])
 
     if df_chart is not None and not df_chart.empty:
+        # Sécurité : calcul garanti de toutes les colonnes
+        if 'ma5' not in df_chart.columns:
+            df_chart['ma5'] = TechnicalIndicators.calculate_sma(df_chart['Close'], window=5)
         if 'ma20' not in df_chart.columns:
             df_chart['ma20'] = TechnicalIndicators.calculate_sma(df_chart['Close'], window=20)
         if 'ma80' not in df_chart.columns:
             df_chart['ma80'] = TechnicalIndicators.calculate_sma(df_chart['Close'], window=80)
         if 'ma320' not in df_chart.columns:
             df_chart['ma320'] = TechnicalIndicators.calculate_sma(df_chart['Close'], window=320)
+        if 'rsi21' not in df_chart.columns:
+            df_chart['rsi21'] = TechnicalIndicators.calculate_rsi(df_chart['Close'], period=21)
 
         active_macro_col = 'ma320' if not is_cloud_strategy else 'ma80'
         active_bbw_series = df_chart.get('bbw320', df_chart.get('bbw')) if not is_cloud_strategy else df_chart.get('bbw80', df_chart.get('bbw'))
@@ -422,13 +427,15 @@ if results:
             rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.06,
             row_heights=[0.55, 0.23, 0.22],
             subplot_titles=(
-                f"Chandeliers, SMA 20 & {macro_name} — {selected_sym}",
-                "RSI (21) • Seuil Surachat 70 Déclencheur",
-                f"Paolo BBW % ({macro_name}) & Seuil Compression"
+                f"1. PRIX & MOYENNES MOBILES (SMA 5, 20 & {macro_name}) — {selected_sym}",
+                "2. OSCILLATEUR RSI (21) • Survente ≤ 30 | Zone Neutre 45-55 | Pivot 50 | Surachat ≥ 70",
+                f"3. VOLATILITÉ PAOLO BBW % ({macro_name}) & Seuil Plancher"
             )
         )
         
-        # Étage 1 : Chandeliers, SMA 5 (Visuel court terme), SMA 20 et Macro SMA
+        # ----------------------------------------------------
+        # ÉTAGE 1 : CHANDELIERS & MOYENNES MOBILES
+        # ----------------------------------------------------
         fig.add_trace(go.Candlestick(x=df_chart.index, open=df_chart['Open'], high=df_chart['High'], low=df_chart['Low'], close=df_chart['Close'], name="Prix"), row=1, col=1)
         fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['ma5'], line=dict(color='#00d4ff', width=1.5), name='SMA 5 (Court terme)'), row=1, col=1)
         fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['ma20'], line=dict(color='#ffaa00', width=2), name='SMA 20 (Intermédiaire)'), row=1, col=1)
@@ -444,11 +451,11 @@ if results:
                 x=sig_dates, y=sig_prices, mode="markers+text",
                 marker=dict(symbol="triangle-up", size=14, color="#00e676", line=dict(width=1.5, color="#ffffff")),
                 text=sig_labels, textposition="bottom center",
-                textfont=dict(color="#00e676", size=11, family="Arial Black"),
-                name="Signal Entrée Impulsion"
+                textfont=dict(color="#00e676", size=12, family="Arial Black"),
+                name="Signal Entrée"
             ), row=1, col=1)
 
-        # Lignes Stop Loss, TP1 et TP2
+        # Lignes Stop Loss, TP1 et TP2 sur le prix
         if is_impulse_strategy and active_asset and active_asset.get("impulse_sl"):
             sl_val = active_asset['impulse_sl']
             tp1_val = active_asset.get('impulse_tp1')
@@ -459,43 +466,52 @@ if results:
             if tp2_val:
                 fig.add_hline(y=tp2_val, line_dash="dash", line_color="#00d4ff", annotation_text=f"TP2 (35% @ 1:3): ${tp2_val}", row=1, col=1)
 
-        # Étage 2 : RSI 21 avec niveaux 70, Pivot 50, Zone Neutre 45-55 et Survente 30
-        if 'rsi21' not in df_chart.columns:
-            df_chart['rsi21'] = TechnicalIndicators.calculate_rsi(df_chart['Close'], period=21)
+        # ----------------------------------------------------
+        # ÉTAGE 2 : OSCILLATEUR RSI (21) PURE AVEC NIVEAUX
+        # ----------------------------------------------------
+        fig.add_trace(go.Scatter(
+            x=df_chart.index,
+            y=df_chart['rsi21'],
+            line=dict(color='#ffd600', width=2.2),
+            name='RSI (21 Périodes)',
+            showlegend=True
+        ), row=2, col=1)
+        
+        # Zone Neutre 45 à 55 (Bande ombrée grise transparente)
+        fig.add_hrect(y0=45, y1=55, fillcolor="rgba(255, 255, 255, 0.08)", line_width=0, row=2, col=1)
+        
+        # Niveaux clés RSI
+        fig.add_hline(y=70, line_dash="dash", line_color="#ff1744", line_width=1.5, annotation_text="Surachat 70 (Déclencheur T1)", row=2, col=1)
+        fig.add_hline(y=55, line_dash="dot", line_color="rgba(255, 255, 255, 0.35)", annotation_text="Haut Neutre 55", row=2, col=1)
+        fig.add_hline(y=50, line_dash="solid", line_color="#ffffff", line_width=2, annotation_text="PIVOT 50 (Pullback)", row=2, col=1)
+        fig.add_hline(y=45, line_dash="dot", line_color="rgba(255, 255, 255, 0.35)", annotation_text="Bas Neutre 45", row=2, col=1)
+        fig.add_hline(y=30, line_dash="dash", line_color="#00e676", line_width=1.5, annotation_text="Survente 30", row=2, col=1)
 
-        fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['rsi21'], line=dict(color='#ffd600', width=2), name='RSI 21'), row=2, col=1)
-        
-        # 1. Seuil de Surachat Déclencheur (70)
-        fig.add_hline(y=70, line_dash="dash", line_color="#ff1744", annotation_text="Surachat 70 (Déclencheur T1)", row=2, col=1)
-        
-        # 2. Zone Neutre 45 à 55 (Bande centrale)
-        fig.add_hrect(y0=45, y1=55, fillcolor="rgba(255, 255, 255, 0.05)", line_width=0, row=2, col=1)
-        fig.add_hline(y=55, line_dash="dot", line_color="rgba(255, 255, 255, 0.3)", annotation_text="Haut Neutre 55", row=2, col=1)
-        fig.add_hline(y=50, line_dash="solid", line_color="#ffffff", line_width=1.5, annotation_text="PIVOT 50 (Ligne de Pullback)", row=2, col=1)
-        fig.add_hline(y=45, line_dash="dot", line_color="rgba(255, 255, 255, 0.3)", annotation_text="Bas Neutre 45", row=2, col=1)
-        
-        # 3. Seuil de Survente (30)
-        fig.add_hline(y=30, line_dash="dash", line_color="#00e676", annotation_text="Survente 30", row=2, col=1)
-
-        # Étage 3 : Paolo BBW
+        # ----------------------------------------------------
+        # ÉTAGE 3 : VOLATILITÉ PAOLO BBW %
+        # ----------------------------------------------------
         if active_bbw_series is not None and active_bbw_min is not None:
-            fig.add_trace(go.Scatter(x=df_chart.index, y=active_bbw_series, line=dict(color='#1e90ff', width=2), name=f'Paolo BBW % ({macro_name})'), row=3, col=1)
+            fig.add_trace(go.Scatter(x=df_chart.index, y=active_bbw_series, line=dict(color='#1e90ff', width=2), name=f'BBW % ({macro_name})'), row=3, col=1)
             fig.add_trace(go.Scatter(x=df_chart.index, y=active_bbw_min, line=dict(color='#ff1744', width=1.5, dash='dot'), name='Seuil Compression (Min)'), row=3, col=1)
 
+        # Mise en page globale
         fig.update_layout(
-            template="plotly_dark", height=860, margin=dict(l=40, r=40, t=65, b=40), hovermode="x unified"
+            template="plotly_dark",
+            height=880,
+            margin=dict(l=40, r=40, t=65, b=40),
+            hovermode="x unified"
         )
         
-        # Abscisse de l'étage 1 (Prix)
+        # Abscisse de l'étage 1 (Prix) : Années bien visibles en cyan
         fig.update_xaxes(
             showticklabels=True, tickformat="%Y", dtick="M12",
             tickfont=dict(color="#00d4ff", size=13, family="Arial Black"),
             showgrid=True, gridcolor="rgba(255, 255, 255, 0.18)", gridwidth=1.5,
             tickangle=0, row=1, col=1
         )
-        # Étage 2 (RSI)
-        fig.update_xaxes(showticklabels=False, showgrid=True, gridcolor="rgba(255, 255, 255, 0.12)", gridwidth=1.5, dtick="M12", row=2, col=1)
-        # Étage 3 (BBW)
+        # Étage 2 (RSI) : Graduations d'années
+        fig.update_xaxes(showticklabels=False, showgrid=True, gridcolor="rgba(255, 255, 255, 0.10)", gridwidth=1, dtick="M12", row=2, col=1)
+        # Étage 3 (BBW) : Mois et Années détaillés tout en bas
         fig.update_xaxes(
             showticklabels=True, tickformat="%b %Y", dtick="M12",
             tickfont=dict(color="#ffffff", size=11), showgrid=True,
@@ -503,6 +519,13 @@ if results:
         )
 
         fig.update_yaxes(title_text="Prix ($)", row=1, col=1)
-        fig.update_yaxes(title_text="RSI", range=[10, 90], row=2, col=1)
+        # Échelle verrouillée et graduations nettes pour le RSI
+        fig.update_yaxes(
+            title_text="RSI 21",
+            range=[15, 85],
+            tickvals=[30, 45, 50, 55, 70],
+            ticktext=["30", "45", "50", "55", "70"],
+            row=2, col=1
+        )
         fig.update_yaxes(title_text="BBW %", row=3, col=1)
         st.plotly_chart(fig, use_container_width=True)
