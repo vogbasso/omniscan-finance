@@ -150,10 +150,10 @@ if results:
                     st.write(f"**SMA 5** : `${round(pr.get('df_m5', pr['price']), 2)}` | **SMA 20** : `${round(pr.get('df_m20', pr['price']), 2)}`")
         else:
             st.info("ℹ️ Aucun actif actuellement en zone de pullback sous 50 après impulsion.")
-        if waiting_conf:
-            st.warning(f"👀 {len(waiting_conf)} actif(s) entrés sur impulsion en route vers la confirmation SMA 20 > 320 !")
-            cols2 = st.columns(min(len(waiting_conf), 4))
-            for idx, wc in enumerate(waiting_conf[:4]):
+        if pullback_ready:
+            st.warning(f"👀 {len(pullback_ready)} actif(s) entrés sur impulsion en route vers la confirmation SMA 20 > 320 !")
+            cols2 = st.columns(min(len(pullback_ready), 4))
+            for idx, pr in enumerate(pullback_ready[:4]):
                 with cols2[idx]:
                     st.markdown(f"#### **{wc['name']}** ({wc['symbol']})")
                     st.write(f"**Prix Actuel** : `${wc['price']}`")
