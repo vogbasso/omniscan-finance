@@ -250,7 +250,19 @@ if results:
         chg_val = r["change_pct"]
         chg_str = f"▲ +{chg_val:.2f}%" if chg_val > 0 else (f"▼ {chg_val:.2f}%" if chg_val < 0 else "  0.00%")
         rsi_val = r.get("rsi", 50.0)
-        rsi_display = f"{rsi_val} | {t.get(r.get('rsi_zone', 'rsi_neutral'), '')}"
+        if is_impulse_strategy:
+            if rsi_val >= 70:
+                rsi_display = f"🔥 {rsi_val} | Surachat (>=70 Déclencheur)"
+            elif rsi_val < 50 and rsi_val > 30:
+                rsi_display = f"⏳ {rsi_val} | Pullback (< 50)"
+            elif 45 <= rsi_val <= 55:
+                rsi_display = f"⚪ {rsi_val} | Pivot 50 (Neutre 45-55)"
+            elif rsi_val <= 30:
+                rsi_display = f"🟢 {rsi_val} | Survente (<=30)"
+            else:
+                rsi_display = f"↗️ {rsi_val} | Flux (50-70)"
+        else:
+            rsi_display = f"{rsi_val} | {t.get(r.get('rsi_zone', 'rsi_neutral'), '')}"
 
         bbw_val = r.get("bbw320", r.get("bbw", 0.0))
         is_sq = r.get("bbw320_squeeze", r.get("bbw_squeeze", False))
@@ -339,6 +351,17 @@ if results:
             return "background-color: rgba(255, 82, 82, 0.15); color: #ff5252; font-weight: bold; border-left: 3px solid #ff5252;"
         return "color: #9e9e9e;"
 
+    def style_rsi_col(val):
+        if "Surachat" in str(val) or ">=70" in str(val):
+            return "background-color: rgba(255, 23, 68, 0.2); color: #ff1744; font-weight: bold; border-left: 3px solid #ff1744;"
+        elif "Pullback" in str(val) or "< 50" in str(val):
+            return "background-color: rgba(30, 144, 255, 0.18); color: #1e90ff; font-weight: bold;"
+        elif "Survente" in str(val) or "<=30" in str(val):
+            return "background-color: rgba(0, 230, 118, 0.18); color: #00e676; font-weight: bold;"
+        elif "Pivot" in str(val):
+            return "color: #e0e0e0; font-weight: 500;"
+        return "color: #b0bec5;"
+
     def style_signal(val):
         if "🔥" in str(val):
             return "background-color: rgba(0, 230, 118, 0.25); color: #00e676; font-weight: bold; border-left: 3px solid #00e676;"
@@ -361,6 +384,7 @@ if results:
             styler.map(style_change, subset=[t["col_change"]])
             .map(style_macro, subset=[col_macro])
             .map(style_signal, subset=["Signal Détecté"])
+            .map(style_rsi_col, subset=["RSI (21)"])
             .map(style_bbw, subset=[col_bbw])
         )
         st.dataframe(styled_df, use_container_width=True, height=450)
@@ -435,10 +459,22 @@ if results:
             if tp2_val:
                 fig.add_hline(y=tp2_val, line_dash="dash", line_color="#00d4ff", annotation_text=f"TP2 (35% @ 1:3): ${tp2_val}", row=1, col=1)
 
-        # Étage 2 : RSI 21
+        # Étage 2 : RSI 21 avec niveaux 70, Pivot 50, Zone Neutre 45-55 et Survente 30
+        if 'rsi21' not in df_chart.columns:
+            df_chart['rsi21'] = TechnicalIndicators.calculate_rsi(df_chart['Close'], period=21)
+
         fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['rsi21'], line=dict(color='#ffd600', width=2), name='RSI 21'), row=2, col=1)
-        fig.add_hline(y=70, line_dash="dash", line_color="#ff5252", annotation_text="Surachat 70 (Déclencheur)", row=2, col=1)
-        fig.add_hline(y=50, line_dash="solid", line_color="#ffffff", annotation_text="Niveau 50", row=2, col=1)
+        
+        # 1. Seuil de Surachat Déclencheur (70)
+        fig.add_hline(y=70, line_dash="dash", line_color="#ff1744", annotation_text="Surachat 70 (Déclencheur T1)", row=2, col=1)
+        
+        # 2. Zone Neutre 45 à 55 (Bande centrale)
+        fig.add_hrect(y0=45, y1=55, fillcolor="rgba(255, 255, 255, 0.05)", line_width=0, row=2, col=1)
+        fig.add_hline(y=55, line_dash="dot", line_color="rgba(255, 255, 255, 0.3)", annotation_text="Haut Neutre 55", row=2, col=1)
+        fig.add_hline(y=50, line_dash="solid", line_color="#ffffff", line_width=1.5, annotation_text="PIVOT 50 (Ligne de Pullback)", row=2, col=1)
+        fig.add_hline(y=45, line_dash="dot", line_color="rgba(255, 255, 255, 0.3)", annotation_text="Bas Neutre 45", row=2, col=1)
+        
+        # 3. Seuil de Survente (30)
         fig.add_hline(y=30, line_dash="dash", line_color="#00e676", annotation_text="Survente 30", row=2, col=1)
 
         # Étage 3 : Paolo BBW
