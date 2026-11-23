@@ -257,3 +257,111 @@ class TechnicalIndicators:
             "trade_type": active_trade['trade_type'] if active_trade else "",
             "trade_signals_history": trade_signals_history
         }
+
+
+    @staticmethod
+    def evaluate_rsi21_sma20_320_strategy(df: pd.DataFrame) -> Dict[str, Any]:
+        """
+        STRATÉGIE PAR DÉFAUT PAOLO BASSO : RSI 21 SURACHAT EN PHASE BAISSIÈRE (SMA 20/320)
+        - SMA 20 > SMA 320 : Tendance Haussière | SMA 20 < SMA 320 : Tendance Baissière
+        - Signal d'Achat : En tendance baissière (20 < 320), le RSI 21 touche >= 70 (Surachat confirmé)
+        - Stop Loss : Plus bas absolu enregistré pendant la phase de vente (20 < 320)
+        - Confirmation : Attendre que SMA 20 croise au-dessus de SMA 320
+        - Sorties : TP1 50% à 1:1, TP2 35% à 1:3, Solde 15% en trailing stop jusqu'à repasse sous 320
+        """
+        close_col = df['Close'] if 'Close' in df.columns else df['close']
+        low_col = df['Low'] if 'Low' in df.columns else df['low']
+
+        n = len(df)
+        in_bear_phase = False
+        bear_lowest_low = None
+        has_triggered_buy_in_bear = False
+        active_trade = None
+        trade_signals_history = []
+        last_signal_event = None
+
+        for i in range(n):
+            close = float(close_col.iloc[i])
+            low = float(low_col.iloc[i])
+            m20 = float(df['ma20'].iloc[i])
+            m320 = float(df['ma320'].iloc[i])
+            rsi = float(df['rsi21'].iloc[i])
+            prev_rsi = float(df['rsi21'].iloc[i-1]) if i > 0 else 50.0
+
+            # 1. Détection de la tendance macro (20 vs 320)
+            is_macro_bear = m20 < m320
+            is_macro_bull = m20 >= m320
+
+            # Entrée en phase baissière
+            if is_macro_bear:
+                if not in_bear_phase:
+                    in_bear_phase = True
+                    bear_lowest_low = low
+                    has_triggered_buy_in_bear = False
+                else:
+                    bear_lowest_low = min(bear_lowest_low, low)
+
+                # DÉCLENCHEUR D'ACHAT : RSI touche la zone des 70 (Surachat en plein bear market)
+                if rsi >= 70 and not has_triggered_buy_in_bear:
+                    has_triggered_buy_in_bear = True
+                    entry_price = close
+                    sl_price = bear_lowest_low if (bear_lowest_low is not None and bear_lowest_low < entry_price) else low * 0.95
+                    risk = entry_price - sl_price
+                    tp1 = entry_price + (1.0 * risk)
+                    tp2 = entry_price + (3.0 * risk)
+
+                    active_trade = {
+                        "entry": entry_price,
+                        "sl": sl_price,
+                        "tp1": tp1,
+                        "tp2": tp2,
+                        "status": "WAIT_CONFIRMATION_20_320",
+                        "date": df.index[i]
+                    }
+
+                    trade_signals_history.append({
+                        "date": df.index[i],
+                        "price": entry_price,
+                        "sl": sl_price,
+                        "tp1": tp1,
+                        "tp2": tp2,
+                        "label": "BUY IMPULSE"
+                    })
+
+                    if i == n - 1:
+                        last_signal_event = "signal_buy_impulse_fresh"
+
+            # Passage en phase haussière (Confirmation 20 > 320)
+            elif is_macro_bull:
+                in_bear_phase = False
+                if active_trade and active_trade["status"] == "WAIT_CONFIRMATION_20_320":
+                    active_trade["status"] = "TREND_CONFIRMED_BULL"
+
+        # Diagnostic sur la dernière bougie
+        last_m20 = float(df['ma20'].iloc[-1])
+        last_m320 = float(df['ma320'].iloc[-1])
+        last_rsi = float(df['rsi21'].iloc[-1])
+        macro_trend = "BULL" if last_m20 >= last_m320 else "BEAR"
+
+        if last_signal_event == "signal_buy_impulse_fresh":
+            state = "STATE_FRESH_BUY_IMPULSE"
+        elif active_trade and active_trade["status"] == "TREND_CONFIRMED_BULL" and macro_trend == "BULL":
+            state = "STATE_TREND_CONFIRMED"
+        elif active_trade and active_trade["status"] == "WAIT_CONFIRMATION_20_320" and macro_trend == "BEAR":
+            state = "STATE_WAIT_CONFIRMATION"
+        elif macro_trend == "BEAR":
+            state = "STATE_BEAR_WATCHING"
+        else:
+            state = "STATE_BULL_ACTIVE"
+
+        return {
+            "macro_trend": macro_trend,
+            "state": state,
+            "active_trade": active_trade,
+            "entry_price": round(active_trade["entry"], 4) if active_trade else None,
+            "sl_price": round(active_trade["sl"], 4) if active_trade else None,
+            "tp1_price": round(active_trade["tp1"], 4) if active_trade else None,
+            "tp2_price": round(active_trade["tp2"], 4) if active_trade else None,
+            "bear_lowest_low": round(bear_lowest_low, 4) if bear_lowest_low else None,
+            "trade_signals_history": trade_signals_history
+        }

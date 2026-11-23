@@ -117,6 +117,7 @@ class UnifiedMarketProvider:
 
             regime, state = TechnicalIndicators.evaluate_regime_and_state(df)
             rsi21_strat = TechnicalIndicators.evaluate_rsi21_polarity_strategy(df)
+            rsi_sma20_320_strat = TechnicalIndicators.evaluate_rsi21_sma20_320_strategy(df)
 
             last_close = float(df['Close'].iloc[-1])
             prev_close = float(df['Close'].iloc[-2]) if len(df) > 1 else last_close
@@ -159,6 +160,12 @@ class UnifiedMarketProvider:
                 "rsi_zone": TechnicalIndicators.evaluate_rsi_zone(float(df['rsi21'].iloc[-1])),
                 "regime": regime,
                 "state": state,
+                "rsi_sma20_320_strat": rsi_sma20_320_strat,
+                "macro_trend": rsi_sma20_320_strat['macro_trend'],
+                "impulse_state": rsi_sma20_320_strat['state'],
+                "impulse_sl": rsi_sma20_320_strat['sl_price'],
+                "impulse_tp1": rsi_sma20_320_strat['tp1_price'],
+                "impulse_tp2": rsi_sma20_320_strat['tp2_price'],
                 "rsi21_strat": rsi21_strat,
                 "rsi_polarity": rsi21_strat['polarity'],
                 "rsi_state": rsi21_strat['state'],

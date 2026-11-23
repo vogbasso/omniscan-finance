@@ -14,7 +14,7 @@ from src.providers.markets import UnifiedMarketProvider
 from src.core.indicators import TechnicalIndicators
 
 st.set_page_config(
-    page_title="OmniScan Finance - Double Stratégie 5/20/80 & RSI 21",
+    page_title="OmniScan Finance - Screener RSI 21 & SMA 20/320",
     page_icon="📈",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -33,16 +33,19 @@ t = load_locale(lang_code)
 
 st.sidebar.markdown("---")
 
-# SÉLECTEUR DE MÉTHODE D'ANALYSE
+# SÉLECTEUR DE MÉTHODE D'ANALYSE (OPTION 1 PAR DÉFAUT)
 strategy_choice = st.sidebar.radio(
     "Méthode d'Analyse" if lang_code == "fr" else "Strategy",
     options=[
-        "🌟 RSI 21 / MM 5-20 / MM 320 (Défaut)",
-        "📊 Triple MM 5 / 20 / 80 (Regime Originel)"
+        "🌟 Reversal Impulsion (RSI 21 / SMA 20-320) [Défaut]",
+        "🎯 RSI 21 / Pullback 50 & MM 5-20",
+        "📊 Triple MM 5 / 20 / 80 (Cloud 20/80)"
     ],
     index=0
 )
-is_rsi_strategy = "RSI 21" in strategy_choice
+is_impulse_strategy = "Reversal Impulsion" in strategy_choice
+is_pullback50_strategy = "Pullback 50" in strategy_choice
+is_cloud_strategy = "Triple MM" in strategy_choice
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("⚙️ " + ("Configuration du Scan" if lang_code == "fr" else "Scan Settings"))
@@ -75,12 +78,16 @@ custom_search = st.sidebar.text_input("Ticker personnalisé (ex: BTC/USDT, NVDA)
 timeframe_display = "Hebdomadaire (Weekly - 1w)" if lang_code == "fr" else "Weekly (1w)"
 st.sidebar.info(f"⏱️ **Timeframe** : {timeframe_display}")
 
-if is_rsi_strategy:
-    st.title("🌟 OmniScan Finance — Stratégie RSI 21 / MM 5-20 & MM 320")
-    st.caption("Polarité par transition 30/70 • Pullback sous 50 • Crossover MM 5/20 • Macro MM 320 • Long Only")
+# En-tête
+if is_impulse_strategy:
+    st.title("🌟 OmniScan Finance — Stratégie Reversal Impulsion (RSI 21 / SMA 20-320)")
+    st.caption("Achat sur Surachat RSI 21 (>= 70) en Tendance Baissière (SMA 20 < 320) • SL au plus bas bear market • TP1 50% (1:1) • TP2 35% (1:3) • Trailing 15%")
+elif is_pullback50_strategy:
+    st.title("🎯 OmniScan Finance — Stratégie RSI 21 / MM 5-20 & Pullback 50")
+    st.caption("Polarité par transition 30/70 • Pullback sous 50 • Crossover MM 5/20 • Long Only")
 else:
     st.title("📊 OmniScan Finance — Stratégie Triple MM 5 / 20 / 80")
-    st.caption("Mémoire de Régime (Acheteur/Vendeur) • Faisceau 5 / 20 / 80 • Compression Paolo BBW (80)")
+    st.caption("Cloud SMA 20 / SMA 80 • Mémoire de Régime • Compression Paolo BBW (80)")
 
 @st.cache_data(ttl=300, show_spinner=False)
 def get_scanned_data(category: str, limit: int):
@@ -111,45 +118,56 @@ with st.spinner("Analyse quantitative des flux..." if lang_code == "fr" else "Ru
 if results:
     st.markdown("---")
     
-    # 1. RADARS SELON LA STRATÉGIE
-    if is_rsi_strategy:
-        fresh_buys = [r for r in results if r.get("rsi_state") == "STATE_FRESH_BUY"]
-        pullback_setups = [r for r in results if r.get("rsi_state") == "STATE_PULLBACK_50"]
+    # RADARS D'ALERTE
+    if is_impulse_strategy:
+        fresh_impulse_buys = [r for r in results if r.get("impulse_state") == "STATE_FRESH_BUY_IMPULSE"]
+        waiting_conf = [r for r in results if r.get("impulse_state") == "STATE_WAIT_CONFIRMATION"]
 
-        st.subheader("🎯 RADAR 1 : SIGNAUX D'ACHAT FRAIS (MM5 > MM20 APRÈS PULLBACK < 50)")
+        st.subheader("🎯 RADAR 1 : SIGNAUX D'ACHAT FRAIS (SURACHAT RSI ≥ 70 EN PHASE BAISSIÈRE)")
+        if fresh_impulse_buys:
+            st.success(f"🔥 ALERTE ACHAT REVERSAL : {len(fresh_impulse_buys)} signal(ux) d'impulsion validé(s) !")
+            cols1 = st.columns(min(len(fresh_impulse_buys), 4))
+            for idx, sig in enumerate(fresh_impulse_buys[:4]):
+                with cols1[idx]:
+                    st.markdown(f"#### **{sig['name']}** ({sig['symbol']})")
+                    st.write(f"**Prix Entrée** : `${sig['price']}`")
+                    st.write(f"**Stop Loss** : `${sig.get('impulse_sl')}`")
+                    st.write(f"**TP1 (50% @ 1:1)** : `${sig.get('impulse_tp1')}`")
+                    st.write(f"**TP2 (35% @ 1:3)** : `${sig.get('impulse_tp2')}`")
+        else:
+            st.info("🛡️ Aucun signal d'achat impulsion frais déclenché cette semaine sur cette sélection.")
+
+        st.markdown("---")
+        st.subheader("🔭 RADAR 2 : POSITIONS EN COURS (ATTENTE CONFIRMATION CROSSOVER 20 > 320)")
+        if waiting_conf:
+            st.warning(f"👀 {len(waiting_conf)} actif(s) entrés sur impulsion en route vers la confirmation SMA 20 > 320 !")
+            cols2 = st.columns(min(len(waiting_conf), 4))
+            for idx, wc in enumerate(waiting_conf[:4]):
+                with cols2[idx]:
+                    st.markdown(f"#### **{wc['name']}** ({wc['symbol']})")
+                    st.write(f"**Prix Actuel** : `${wc['price']}`")
+                    st.write(f"**SMA 20** : `${round(wc.get('df_m20', wc['price']), 2)}` | **SMA 320** : `${round(wc.get('df_m320', wc['price']), 2)}`")
+                    st.write(f"**Stop Loss** : `${wc.get('impulse_sl')}`")
+                    st.write(f"**TP1 (1:1)** : `${wc.get('impulse_tp1')}`")
+        else:
+            st.info("ℹ️ Aucune position en attente de confirmation 20 > 320.")
+
+    elif is_pullback50_strategy:
+        fresh_buys = [r for r in results if r.get("rsi_state") == "STATE_FRESH_BUY"]
+        st.subheader("🎯 RADAR 1 : SIGNAUX D'ACHAT (PULLBACK < 50)")
         if fresh_buys:
-            st.success(f"🔥 ALERTE ACHAT MAJEURE : {len(fresh_buys)} signal(ux) d'achat validé(s) !")
+            st.success(f"🔥 {len(fresh_buys)} signal(ux) validé(s) !")
             cols1 = st.columns(min(len(fresh_buys), 4))
             for idx, sig in enumerate(fresh_buys[:4]):
                 with cols1[idx]:
                     st.markdown(f"#### **{sig['name']}** ({sig['symbol']})")
                     st.write(f"**Prix** : `${sig['price']}`")
-                    st.write(f"**Signal** : `🔥 {sig.get('rsi21_strat', {}).get('trade_type', 'Achat Long')}`")
-                    st.write(f"**Stop Loss** : `${sig.get('rsi_sl')}`")
-                    st.write(f"**Objectif TP1 (1:1)** : `${sig.get('rsi_tp1')}`")
+                    st.write(f"**SL** : `${sig.get('rsi_sl')}` | **TP1** : `${sig.get('rsi_tp1')}`")
         else:
-            st.info("🛡️ Aucun signal d'achat frais déclenché cette semaine sur la stratégie RSI 21.")
-
-        st.markdown("---")
-        st.subheader("🔭 RADAR 2 : ZONE DE VEILLE (PULLBACK SOUS 50 EN COURS)")
-        if pullback_setups:
-            st.warning(f"👀 {len(pullback_setups)} actif(s) en respiration saine sous 50 (À l'affût du croisement MM 5 > 20) !")
-            cols2 = st.columns(min(len(pullback_setups), 4))
-            for idx, pb in enumerate(pullback_setups[:4]):
-                with cols2[idx]:
-                    st.markdown(f"#### **{pb['name']}** ({pb['symbol']})")
-                    st.write(f"**Prix Actuel** : `${pb['price']}`")
-                    st.write(f"**RSI (21)** : `{pb.get('rsi')} (< 50)`")
-                    st.write(f"**Paolo BBW (320)** : `{pb.get('bbw320', pb.get('bbw'))}%`")
-        else:
-            st.info("ℹ️ Aucun actif actuellement en phase de pullback sous 50.")
-
+            st.info("🛡️ Aucun signal d'achat frais Pullback 50 cette semaine.")
     else:
-        # STRATÉGIE 5 / 20 / 80
         fresh_signals = [r for r in results if r.get("state") == "state_new_buy"]
-        imminent_setups = [r for r in results if r.get("is_near_signal")]
-
-        st.subheader("🎯 RADAR 1 : SIGNAUX D'ACHAT FRAIS (CASSURE 5/20/80)")
+        st.subheader("🎯 RADAR 1 : SIGNAUX D'ACHAT (CLOUD 20/80)")
         if fresh_signals:
             st.success(f"🔥 {len(fresh_signals)} signal(ux) frais détecté(s) !")
             cols1 = st.columns(min(len(fresh_signals), 4))
@@ -157,33 +175,24 @@ if results:
                 with cols1[idx]:
                     st.markdown(f"#### **{sig['name']}** ({sig['symbol']})")
                     st.write(f"**Prix** : `${sig['price']}`")
-                    st.write(f"**RSI (21)** : `{sig.get('rsi')}`")
         else:
-            st.info("🛡️ Aucun signal d'achat frais 5/20/80 cette semaine.")
-
-        st.markdown("---")
-        st.subheader("🔭 RADAR 2 : ZONE DE VEILLE MM80 (À MOINS DE 3.5%)")
-        if imminent_setups:
-            st.warning(f"👀 {len(imminent_setups)} actif(s) en attaque directe de la MM80 !")
-            cols2 = st.columns(min(len(imminent_setups), 4))
-            for idx, imm in enumerate(imminent_setups[:4]):
-                with cols2[idx]:
-                    st.markdown(f"#### **{imm['name']}** ({imm['symbol']})")
-                    st.write(f"**Prix** : `${imm['price']}`")
-                    st.write(f"**Cible MM80** : `${imm.get('trigger_price')}`")
-        else:
-            st.info("ℹ️ Aucun actif à moins de 3.5% de sa MM80.")
+            st.info("🛡️ Aucun signal d'achat frais Cloud 20/80 cette semaine.")
 
     # Synthèse générale
     st.markdown("---")
     k1, k2, k3, k4 = st.columns(4)
     k1.metric("Actifs Scannés", len(results))
-    bull_count = sum(1 for r in results if (r.get("rsi_polarity") == "POLARITY_BULL" if is_rsi_strategy else r.get("regime") == "regime_bull"))
-    k2.metric("🟢 Polarité Acheteuse" if is_rsi_strategy else "🟢 Régime Acheteur", f"{bull_count} ({round(bull_count/len(results)*100)}%)")
-    k3.metric("RSI Moyen", round(sum(r.get("rsi", 50) for r in results) / len(results), 1))
+    if is_impulse_strategy:
+        bull_count = sum(1 for r in results if r.get("macro_trend") == "BULL")
+        k2.metric("🟢 Macro Haussière (20 > 320)", f"{bull_count} ({round(bull_count/len(results)*100)}%)")
+        bear_count = len(results) - bull_count
+        k3.metric("🔴 Macro Baissière (20 < 320)", f"{bear_count} ({round(bear_count/len(results)*100)}%)")
+    else:
+        bull_count = sum(1 for r in results if (r.get("rsi_polarity") == "POLARITY_BULL" if is_pullback50_strategy else r.get("regime") == "regime_bull"))
+        k2.metric("🟢 Tendance Acheteuse", f"{bull_count} ({round(bull_count/len(results)*100)}%)")
+        k3.metric("RSI Moyen", round(sum(r.get("rsi", 50) for r in results) / len(results), 1))
     
-    # Squeeze selon la méthode
-    squeeze_count = sum(1 for r in results if (r.get("bbw320_squeeze", r.get("bbw_squeeze")) if is_rsi_strategy else r.get("bbw80_squeeze", r.get("bbw_squeeze"))))
+    squeeze_count = sum(1 for r in results if r.get("bbw320_squeeze", r.get("bbw_squeeze")))
     k4.metric("⚡ Squeeze Paolo BBW", squeeze_count)
 
     # TABLEAU DE DONNÉES SYNTHÉTIQUE
@@ -200,26 +209,27 @@ if results:
         rsi_val = r.get("rsi", 50.0)
         rsi_display = f"{rsi_val} | {t.get(r.get('rsi_zone', 'rsi_neutral'), '')}"
 
-        if is_rsi_strategy:
-            polarity_label = "🟢 ACHETEUSE" if r.get("rsi_polarity") == "POLARITY_BULL" else "🔴 VENDEUSE"
-            r_state = r.get("rsi_state", "")
-            if r_state == "STATE_FRESH_BUY":
-                statut_str = f"🔥 {r.get('rsi21_strat', {}).get('trade_type', 'SIGNAL ACHAT')}"
-            elif r_state == "STATE_PULLBACK_50":
-                statut_str = "⏳ PULLBACK < 50"
-            elif r_state == "STATE_OVERBOUGHT_IMPULSE":
-                statut_str = "🚀 IMPULSION (RSI >= 70)"
-            elif r_state == "STATE_BULLISH_TREND":
-                statut_str = "↗️ FLUX ACHETEUR (50-70)"
+        bbw_val = r.get("bbw320", r.get("bbw", 0.0))
+        is_sq = r.get("bbw320_squeeze", r.get("bbw_squeeze", False))
+        bbw_str = f"⚡ {bbw_val:.1f}% (Squeeze)" if is_sq else f"{bbw_val:.1f}%"
+
+        if is_impulse_strategy:
+            macro_trend_label = "🟢 HAUSSIÈRE (20 > 320)" if r.get("macro_trend") == "BULL" else "🔴 BAISSIÈRE (20 < 320)"
+            imp_state = r.get("impulse_state", "")
+            if imp_state == "STATE_FRESH_BUY_IMPULSE":
+                statut_str = "🔥 ACHAT IMPULSION (RSI ≥ 70)"
+            elif imp_state == "STATE_TREND_CONFIRMED":
+                statut_str = "🚀 TENDANCE CONFIRMÉE (20 > 320)"
+            elif imp_state == "STATE_WAIT_CONFIRMATION":
+                statut_str = "⏳ POSITION ACTIVE (ATTENTE 20>320)"
+            elif imp_state == "STATE_BEAR_WATCHING":
+                statut_str = "🔻 VEILLE (20 < 320)"
             else:
-                statut_str = "⚪ ATTENTE CYCLE"
+                statut_str = "↗️ FLUX HAUSSIER ACTIF"
 
-            bbw_val = r.get("bbw320", r.get("bbw", 0.0))
-            is_sq = r.get("bbw320_squeeze", r.get("bbw_squeeze", False))
-            bbw_str = f"⚡ {bbw_val:.1f}% (Squeeze)" if is_sq else f"{bbw_val:.1f}%"
-
-            sl_str = f"${r.get('rsi_sl')}" if r.get('rsi_sl') else "—"
-            tp1_str = f"${r.get('rsi_tp1')}" if r.get('rsi_tp1') else "—"
+            sl_str = f"${r.get('impulse_sl')}" if r.get('impulse_sl') else "—"
+            tp1_str = f"${r.get('impulse_tp1')}" if r.get('impulse_tp1') else "—"
+            tp2_str = f"${r.get('impulse_tp2')}" if r.get('impulse_tp2') else "—"
 
             row = {
                 t["col_symbol"]: r["symbol"],
@@ -227,27 +237,39 @@ if results:
                 t["col_price"]: f"${r['price']}",
                 t["col_change"]: chg_str,
                 "Capitalisation": r.get("market_cap", "N/A"),
-                "Volume": r.get("volume", "N/A"),
+                "RSI (21)": rsi_display,
+                "Tendance Macro": macro_trend_label,
+                "Signal Détecté": statut_str,
+                "Stop Loss (Bas Bear)": sl_str,
+                "TP1 (50% @ 1:1)": tp1_str,
+                "TP2 (35% @ 1:3)": tp2_str,
+                "Trailing (15%)": "Jusqu'à 20 < 320",
+                "Paolo BBW (320)": bbw_str,
+                t["col_dist_ath"]: f"{r.get('dist_ath_pct', 0.0):.1f}%"
+            }
+        elif is_pullback50_strategy:
+            polarity_label = "🟢 ACHETEUSE" if r.get("rsi_polarity") == "POLARITY_BULL" else "🔴 VENDEUSE"
+            row = {
+                t["col_symbol"]: r["symbol"],
+                t["col_name"]: r.get("name", r["symbol"]),
+                t["col_price"]: f"${r['price']}",
+                t["col_change"]: chg_str,
+                "Capitalisation": r.get("market_cap", "N/A"),
                 "RSI (21)": rsi_display,
                 "Polarité": polarity_label,
-                "Signal Détecté": statut_str,
-                "Stop Loss": sl_str,
-                "TP1 (1:1)": tp1_str,
+                "Signal Détecté": r.get("rsi_state", ""),
+                "Stop Loss": f"${r.get('rsi_sl')}" if r.get('rsi_sl') else "—",
+                "TP1 (1:1)": f"${r.get('rsi_tp1')}" if r.get('rsi_tp1') else "—",
                 "Paolo BBW (320)": bbw_str,
                 t["col_dist_ath"]: f"{r.get('dist_ath_pct', 0.0):.1f}%"
             }
         else:
-            bbw_val = r.get("bbw80", r.get("bbw", 0.0))
-            is_sq = r.get("bbw80_squeeze", r.get("bbw_squeeze", False))
-            bbw_str = f"⚡ {bbw_val:.1f}% (Squeeze)" if is_sq else f"{bbw_val:.1f}%"
-
             row = {
                 t["col_symbol"]: r["symbol"],
                 t["col_name"]: r.get("name", r["symbol"]),
                 t["col_price"]: f"${r['price']}",
                 t["col_change"]: chg_str,
                 "Capitalisation": r.get("market_cap", "N/A"),
-                "Volume": r.get("volume", "N/A"),
                 "RSI (21)": rsi_display,
                 t["col_regime"]: t.get(r["regime"], r["regime"]),
                 "Signal Détecté": t.get(r["state"], r["state"]),
@@ -265,16 +287,18 @@ if results:
             return "background-color: rgba(255, 82, 82, 0.18); color: #ff5252; font-weight: bold;"
         return ""
 
-    def style_polarity(val):
-        if "ACHETEUSE" in str(val) or "ACHETEUR" in str(val):
+    def style_macro(val):
+        if "HAUSSIÈRE" in str(val) or "ACHETEUSE" in str(val) or "ACHETEUR" in str(val):
             return "background-color: rgba(0, 230, 118, 0.15); color: #00e676; font-weight: bold; border-left: 3px solid #00e676;"
-        elif "VENDEUSE" in str(val) or "VENDEUR" in str(val):
+        elif "BAISSIÈRE" in str(val) or "VENDEUSE" in str(val) or "VENDEUR" in str(val):
             return "background-color: rgba(255, 82, 82, 0.15); color: #ff5252; font-weight: bold; border-left: 3px solid #ff5252;"
         return "color: #9e9e9e;"
 
     def style_signal(val):
         if "🔥" in str(val):
             return "background-color: rgba(0, 230, 118, 0.25); color: #00e676; font-weight: bold; border-left: 3px solid #00e676;"
+        elif "🚀" in str(val):
+            return "background-color: rgba(41, 98, 255, 0.25); color: #2962ff; font-weight: bold;"
         elif "⏳" in str(val):
             return "background-color: rgba(255, 171, 0, 0.2); color: #ffab00; font-weight: bold;"
         return ""
@@ -286,11 +310,11 @@ if results:
 
     styler = df_display.style
     try:
-        col_pol = "Polarité" if is_rsi_strategy else t["col_regime"]
-        col_bbw = "Paolo BBW (320)" if is_rsi_strategy else "Paolo BBW (80)"
+        col_macro = "Tendance Macro" if is_impulse_strategy else ("Polarité" if is_pullback50_strategy else t["col_regime"])
+        col_bbw = "Paolo BBW (320)" if not is_cloud_strategy else "Paolo BBW (80)"
         styled_df = (
             styler.map(style_change, subset=[t["col_change"]])
-            .map(style_polarity, subset=[col_pol])
+            .map(style_macro, subset=[col_macro])
             .map(style_signal, subset=["Signal Détecté"])
             .map(style_bbw, subset=[col_bbw])
         )
@@ -298,20 +322,22 @@ if results:
     except Exception:
         st.dataframe(df_display, use_container_width=True, height=450)
 
-    # 3. INSPECTEUR GRAPHIQUE (COMMUTATION AUTOMATIQUE MM80 / MM320)
+    # 3. INSPECTEUR GRAPHIQUE INTERACTIF
     st.markdown("---")
-    macro_name = "MM320" if is_rsi_strategy else "MM80"
-    st.subheader(f"📈 Inspecteur Technique : Chandeliers + MM (5 / 20 / {macro_name}) + RSI 21 + Paolo BBW")
+    macro_name = "SMA 320" if not is_cloud_strategy else "SMA 80"
+    st.subheader(f"📈 Inspecteur Technique : Chandeliers + SMA 20 + {macro_name} + RSI 21 + Niveaux TP/SL")
     selected_sym = st.selectbox("Sélectionnez un actif :", [r["symbol"] for r in results])
     df_chart = charts_cache.get(selected_sym)
 
     active_asset = next((x for x in results if x["symbol"] == selected_sym), None)
-    trade_signals = active_asset.get("trade_signals_history", []) if active_asset else []
+    trade_signals = []
+    if active_asset:
+        if is_impulse_strategy:
+            trade_signals = active_asset.get("rsi_sma20_320_strat", {}).get("trade_signals_history", [])
+        else:
+            trade_signals = active_asset.get("trade_signals_history", [])
 
     if df_chart is not None and not df_chart.empty:
-        # Sécurité : vérification et calcul automatique si nécessaire
-        if 'ma5' not in df_chart.columns:
-            df_chart['ma5'] = TechnicalIndicators.calculate_sma(df_chart['Close'], window=5)
         if 'ma20' not in df_chart.columns:
             df_chart['ma20'] = TechnicalIndicators.calculate_sma(df_chart['Close'], window=20)
         if 'ma80' not in df_chart.columns:
@@ -319,30 +345,27 @@ if results:
         if 'ma320' not in df_chart.columns:
             df_chart['ma320'] = TechnicalIndicators.calculate_sma(df_chart['Close'], window=320)
 
-        # Choix de la moyenne lente et du BBW selon la méthode
-        active_macro_col = 'ma320' if is_rsi_strategy else 'ma80'
-        active_macro_label = 'MM320 (Macro 6 ans)' if is_rsi_strategy else 'MM80 (Tendance Fond)'
-        active_bbw_series = df_chart.get('bbw320', df_chart.get('bbw')) if is_rsi_strategy else df_chart.get('bbw80', df_chart.get('bbw'))
-        active_bbw_min = df_chart.get('bbw320_min', df_chart.get('bbw_min')) if is_rsi_strategy else df_chart.get('bbw80_min', df_chart.get('bbw_min'))
+        active_macro_col = 'ma320' if not is_cloud_strategy else 'ma80'
+        active_bbw_series = df_chart.get('bbw320', df_chart.get('bbw')) if not is_cloud_strategy else df_chart.get('bbw80', df_chart.get('bbw'))
+        active_bbw_min = df_chart.get('bbw320_min', df_chart.get('bbw_min')) if not is_cloud_strategy else df_chart.get('bbw80_min', df_chart.get('bbw_min'))
 
         fig = make_subplots(
             rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.06,
             row_heights=[0.55, 0.23, 0.22],
             subplot_titles=(
-                f"Chandeliers, MM (5 / 20 / {macro_name}) & Signaux d'Entrée — {selected_sym}",
-                "RSI (21) • Survente <= 30 | Pivot 50 | Surachat >= 70",
-                f"Paolo BBW % (Bandes {macro_name}) & Seuil Compression (Min Lookback)"
+                f"Chandeliers, SMA 20 & {macro_name} — {selected_sym}",
+                "RSI (21) • Seuil Surachat 70 Déclencheur",
+                f"Paolo BBW % ({macro_name}) & Seuil Compression"
             )
         )
         
-        # Étage 1 : Chandeliers et MM
+        # Étage 1 : Chandeliers & SMA
         fig.add_trace(go.Candlestick(x=df_chart.index, open=df_chart['Open'], high=df_chart['High'], low=df_chart['Low'], close=df_chart['Close'], name="Prix"), row=1, col=1)
-        fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['ma5'], line=dict(color='#00d4ff', width=1.5), name='MM5'), row=1, col=1)
-        fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['ma20'], line=dict(color='#ffaa00', width=2), name='MM20'), row=1, col=1)
-        fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart[active_macro_col], line=dict(color='#d000ff', width=2.5), name=active_macro_label), row=1, col=1)
+        fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['ma20'], line=dict(color='#ffaa00', width=2), name='SMA 20'), row=1, col=1)
+        fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart[active_macro_col], line=dict(color='#d000ff', width=2.5), name=macro_name), row=1, col=1)
 
         # Signaux d'entrée ▲
-        if is_rsi_strategy and trade_signals:
+        if trade_signals:
             sig_dates = [s['date'] for s in trade_signals if s['date'] in df_chart.index]
             sig_prices = [df_chart.loc[d, 'Low'] * 0.98 for d in sig_dates]
             sig_labels = [f"▲ {s['label']}" for s in trade_signals if s['date'] in df_chart.index]
@@ -351,91 +374,53 @@ if results:
                 x=sig_dates, y=sig_prices, mode="markers+text",
                 marker=dict(symbol="triangle-up", size=14, color="#00e676", line=dict(width=1.5, color="#ffffff")),
                 text=sig_labels, textposition="bottom center",
-                textfont=dict(color="#00e676", size=12, family="Arial Black"),
-                name="Signal d'Entrée Achat"
+                textfont=dict(color="#00e676", size=11, family="Arial Black"),
+                name="Signal Entrée Impulsion"
             ), row=1, col=1)
 
-        # Lignes Stop Loss et TP1
-        if is_rsi_strategy and active_asset and active_asset.get("rsi_sl") and active_asset.get("rsi_tp1"):
-            fig.add_hline(y=active_asset['rsi_sl'], line_dash="dash", line_color="#ff1744", annotation_text=f"SL: ${active_asset['rsi_sl']}", row=1, col=1)
-            fig.add_hline(y=active_asset['rsi_tp1'], line_dash="dash", line_color="#00e676", annotation_text=f"TP1 (1:1): ${active_asset['rsi_tp1']}", row=1, col=1)
+        # Lignes Stop Loss, TP1 et TP2
+        if is_impulse_strategy and active_asset and active_asset.get("impulse_sl"):
+            sl_val = active_asset['impulse_sl']
+            tp1_val = active_asset.get('impulse_tp1')
+            tp2_val = active_asset.get('impulse_tp2')
+            fig.add_hline(y=sl_val, line_dash="dash", line_color="#ff1744", annotation_text=f"SL (Bas Bear): ${sl_val}", row=1, col=1)
+            if tp1_val:
+                fig.add_hline(y=tp1_val, line_dash="dash", line_color="#00e676", annotation_text=f"TP1 (50% @ 1:1): ${tp1_val}", row=1, col=1)
+            if tp2_val:
+                fig.add_hline(y=tp2_val, line_dash="dash", line_color="#00d4ff", annotation_text=f"TP2 (35% @ 1:3): ${tp2_val}", row=1, col=1)
 
         # Étage 2 : RSI 21
         fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['rsi21'], line=dict(color='#ffd600', width=2), name='RSI 21'), row=2, col=1)
-        fig.add_hline(y=70, line_dash="dash", line_color="#ff5252", annotation_text="Surachat 70", row=2, col=1)
-        fig.add_hline(y=50, line_dash="solid", line_color="#ffffff", annotation_text="Pivot 50 (Pullback)", row=2, col=1)
+        fig.add_hline(y=70, line_dash="dash", line_color="#ff5252", annotation_text="Surachat 70 (Déclencheur)", row=2, col=1)
+        fig.add_hline(y=50, line_dash="solid", line_color="#ffffff", annotation_text="Niveau 50", row=2, col=1)
         fig.add_hline(y=30, line_dash="dash", line_color="#00e676", annotation_text="Survente 30", row=2, col=1)
 
-        # Étage 3 : Paolo BBW spécifique à la méthode
+        # Étage 3 : Paolo BBW
         if active_bbw_series is not None and active_bbw_min is not None:
             fig.add_trace(go.Scatter(x=df_chart.index, y=active_bbw_series, line=dict(color='#1e90ff', width=2), name=f'Paolo BBW % ({macro_name})'), row=3, col=1)
             fig.add_trace(go.Scatter(x=df_chart.index, y=active_bbw_min, line=dict(color='#ff1744', width=1.5, dash='dot'), name='Seuil Compression (Min)'), row=3, col=1)
 
-        # Configuration temporelle : Boutons de zoom par années et graduation explicite
         fig.update_layout(
-            template="plotly_dark",
-            height=860,
-            margin=dict(l=40, r=40, t=65, b=40),
-            hovermode="x unified"
+            template="plotly_dark", height=860, margin=dict(l=40, r=40, t=65, b=40), hovermode="x unified"
         )
         
-        # Boutons de sélection rapide de période temporelle
+        # Abscisse de l'étage 1 (Prix)
         fig.update_xaxes(
-            rangeselector=dict(
-                buttons=list([
-                    dict(count=1, label="1 An", step="year", stepmode="backward"),
-                    dict(count=2, label="2 Ans", step="year", stepmode="backward"),
-                    dict(count=5, label="5 Ans", step="year", stepmode="backward"),
-                    dict(step="all", label="Tout (MAX)")
-                ]),
-                bgcolor="#1e222d",
-                activecolor="#2962ff",
-                font=dict(color="#ffffff", size=11),
-                y=1.05,
-                x=0.0
-            ),
-            rangeslider=dict(visible=False),
-            row=1, col=1
-        )
-
-        # 1. ABSCISSE DE L'ÉTAGE 1 (PRIX) : Années affichées DIRECTEMENT sous les chandeliers
-        fig.update_xaxes(
-            showticklabels=True,
-            tickformat="%Y",
-            dtick="M12",
+            showticklabels=True, tickformat="%Y", dtick="M12",
             tickfont=dict(color="#00d4ff", size=13, family="Arial Black"),
-            showgrid=True,
-            gridcolor="rgba(255, 255, 255, 0.18)",
-            gridwidth=1.5,
-            tickangle=0,
-            row=1, col=1
+            showgrid=True, gridcolor="rgba(255, 255, 255, 0.18)", gridwidth=1.5,
+            tickangle=0, row=1, col=1
         )
-
-        # 2. Étage 2 (RSI) : Grille verticale alignée
+        # Étage 2 (RSI)
+        fig.update_xaxes(showticklabels=False, showgrid=True, gridcolor="rgba(255, 255, 255, 0.12)", gridwidth=1.5, dtick="M12", row=2, col=1)
+        # Étage 3 (BBW)
         fig.update_xaxes(
-            showticklabels=False,
-            showgrid=True,
-            gridcolor="rgba(255, 255, 255, 0.12)",
-            gridwidth=1.5,
-            dtick="M12",
-            row=2, col=1
-        )
-
-        # 3. ABSCISSE DE L'ÉTAGE 3 (BBW) : Mois et Années détaillés tout en bas
-        fig.update_xaxes(
-            showticklabels=True,
-            tickformat="%b %Y",
-            dtick="M12",
-            tickfont=dict(color="#ffffff", size=11),
-            showgrid=True,
-            gridcolor="rgba(255, 255, 255, 0.18)",
-            gridwidth=1.5,
-            tickangle=-25,
-            row=3, col=1
+            showticklabels=True, tickformat="%b %Y", dtick="M12",
+            tickfont=dict(color="#ffffff", size=11), showgrid=True,
+            gridcolor="rgba(255, 255, 255, 0.18)", gridwidth=1.5, tickangle=-25, row=3, col=1
         )
 
         fig.update_yaxes(title_text="Prix ($)", row=1, col=1)
         fig.update_yaxes(title_text="RSI", range=[10, 90], row=2, col=1)
         fig.update_yaxes(title_text="BBW %", row=3, col=1)
-
         st.plotly_chart(fig, use_container_width=True)
