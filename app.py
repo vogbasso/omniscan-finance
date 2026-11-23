@@ -118,78 +118,111 @@ with st.spinner("Analyse quantitative des flux..." if lang_code == "fr" else "Ru
 if results:
     st.markdown("---")
     
-    # RADARS D'ALERTE
+    # ----------------------------------------------------
+    # RADARS SUR-MESURE DÉDIÉS À CHAQUE STRATÉGIE
+    # ----------------------------------------------------
     if is_impulse_strategy:
-        fresh_impulse_buys = [r for r in results if r.get("impulse_state") == "STATE_FRESH_BUY"]
-        pullback_ready = [r for r in results if r.get("impulse_state") == "STATE_PULLBACK_50_READY"]
+        # STRATÉGIE 1 : REVERSAL IMPULSION (RSI 21 / SMA 20-320)
+        fresh_buys = [r for r in results if r.get("impulse_state") == "STATE_FRESH_BUY"]
+        watching_reversal = [r for r in results if r.get("impulse_state") in ["STATE_PULLBACK_50_READY", "STATE_OVERBOUGHT_IMPULSE"]]
 
-        st.subheader("🎯 RADAR 1 : SIGNAUX D'ACHAT FRAIS (CROISEMENT SMA 5 > SMA 20 APRÈS PULLBACK < 50)")
-        if fresh_impulse_buys:
-            st.success(f"🔥 ALERTE ACHAT VALIDÉE : {len(fresh_impulse_buys)} signal(ux) d'entrée validé(s) !")
-            cols1 = st.columns(min(len(fresh_impulse_buys), 4))
-            for idx, sig in enumerate(fresh_impulse_buys[:4]):
+        st.subheader("🎯 RADAR 1 : SIGNAUX D'ACHAT REVERSAL (SMA 5 > SMA 20 SOUS SMA 320)")
+        if fresh_buys:
+            st.success(f"🔥 ALERTE REVERSAL : {len(fresh_buys)} signal(ux) d'achat validé(s) cette semaine !")
+            cols1 = st.columns(min(len(fresh_buys), 4))
+            for idx, sig in enumerate(fresh_buys[:4]):
                 with cols1[idx]:
                     st.markdown(f"#### **{sig['name']}** ({sig['symbol']})")
                     st.write(f"**Prix Entrée** : `${sig['price']}`")
                     st.write(f"**Stop Loss (Bas Bear)** : `${sig.get('impulse_sl')}`")
                     st.write(f"**TP1 (50% @ 1:1)** : `${sig.get('impulse_tp1')}`")
                     st.write(f"**TP2 (35% @ 1:3)** : `${sig.get('impulse_tp2')}`")
+                    st.write(f"**Trailing (15%)** : `Jusqu'à 20 < 320`")
         else:
-            st.info("🛡️ Aucun signal d'achat frais déclenché cette semaine sur cette sélection.")
+            st.info("🛡️ Aucun signal d'achat reversal déclenché cette semaine sur cette sélection.")
 
         st.markdown("---")
-        st.subheader("🔭 RADAR 2 : ZONE DE VEILLE (PULLBACK SOUS 50 EN COURS — ATTENTE CROISEMENT SMA 5 > 20)")
-        if pullback_ready:
-            st.warning(f"👀 {len(pullback_ready)} actif(s) ayant validé l'impulsion >= 70 et respirant sous 50 (À l'affût du croisement SMA 5 > 20) !")
-            cols2 = st.columns(min(len(pullback_ready), 4))
-            for idx, pr in enumerate(pullback_ready[:4]):
+        st.subheader("🔭 RADAR 2 : EN SALLE D'ATTENTE (IMPULSION VALIDÉE -> PULLBACK SOUS 50)")
+        if watching_reversal:
+            st.warning(f"👀 {len(watching_reversal)} actif(s) en cours d'armement de retournement sous la SMA 320 !")
+            cols2 = st.columns(min(len(watching_reversal), 4))
+            for idx, wr in enumerate(watching_reversal[:4]):
                 with cols2[idx]:
-                    st.markdown(f"#### **{pr['name']}** ({pr['symbol']})")
-                    st.write(f"**Prix Actuel** : `${pr['price']}`")
-                    st.write(f"**RSI (21)** : `{pr.get('rsi')} (< 50)`")
-                    st.write(f"**SMA 5** : `${round(pr.get('df_m5', pr['price']), 2)}` | **SMA 20** : `${round(pr.get('df_m20', pr['price']), 2)}`")
+                    st.markdown(f"#### **{wr['name']}** ({wr['symbol']})")
+                    st.write(f"**Prix Actuel** : `${wr['price']}`")
+                    st.write(f"**RSI (21)** : `{wr.get('rsi')}`")
+                    phase_label = "⏳ Pullback < 50 (Guet Croisement 5/20)" if wr.get("impulse_state") == "STATE_PULLBACK_50_READY" else "🚀 Impulsion >= 70 (Attente Repli)"
+                    st.write(f"**Phase** : `{phase_label}`")
+                    st.write(f"**Stop Prévu (Bas)** : `${wr.get('impulse_sl')}`")
         else:
-            st.info("ℹ️ Aucun actif actuellement en zone de pullback sous 50 après impulsion.")
-        if pullback_ready:
-            st.warning(f"👀 {len(pullback_ready)} actif(s) entrés sur impulsion en route vers la confirmation SMA 20 > 320 !")
-            cols2 = st.columns(min(len(pullback_ready), 4))
-            for idx, pr in enumerate(pullback_ready[:4]):
-                with cols2[idx]:
-                    st.markdown(f"#### **{pr['name']}** ({pr['symbol']})")
-                    st.write(f"**Prix Actuel** : `${pr['price']}`")
-                    st.write(f"**SMA 20** : `${round(pr.get('df_m20', pr['price']), 2)}` | **SMA 320** : `${round(pr.get('df_m320', pr['price']), 2)}`")
-                    st.write(f"**Stop Loss** : `${pr.get('impulse_sl')}`")
-                    st.write(f"**TP1 (1:1)** : `${pr.get('impulse_tp1')}`")
-        else:
-            st.info("ℹ️ Aucune position en attente de confirmation 20 > 320.")
+            st.info("ℹ️ Aucun actif en phase d'armement ou de pullback sous 50 après impulsion.")
 
     elif is_pullback50_strategy:
+        # STRATÉGIE 2 : RSI 21 MOMENTUM & POLARITÉ (T1 / T2+ SL CASCADE)
         fresh_buys = [r for r in results if r.get("rsi_state") == "STATE_FRESH_BUY"]
-        st.subheader("🎯 RADAR 1 : SIGNAUX D'ACHAT (PULLBACK < 50)")
+        pullback_setups = [r for r in results if r.get("rsi_state") == "STATE_PULLBACK_50"]
+
+        st.subheader("🎯 RADAR 1 : SIGNAUX D'ACHAT FRAIS (CROISEMENT 5 > 20 EN POLARITÉ VERTE)")
         if fresh_buys:
-            st.success(f"🔥 {len(fresh_buys)} signal(ux) validé(s) !")
+            st.success(f"🔥 ALERTE ACHAT POLARITÉ : {len(fresh_buys)} signal(ux) validé(s) !")
             cols1 = st.columns(min(len(fresh_buys), 4))
             for idx, sig in enumerate(fresh_buys[:4]):
                 with cols1[idx]:
                     st.markdown(f"#### **{sig['name']}** ({sig['symbol']})")
                     st.write(f"**Prix** : `${sig['price']}`")
-                    st.write(f"**SL** : `${sig.get('rsi_sl')}` | **TP1** : `${sig.get('rsi_tp1')}`")
+                    st.write(f"**Type** : `{sig.get('rsi21_strat', {}).get('trade_type', 'Achat Long')}`")
+                    st.write(f"**Stop Loss** : `${sig.get('rsi_sl')}`")
+                    st.write(f"**Objectif TP1** : `${sig.get('rsi_tp1')}`")
         else:
-            st.info("🛡️ Aucun signal d'achat frais Pullback 50 cette semaine.")
+            st.info("🛡️ Aucun signal d'achat frais déclenché cette semaine sur la stratégie de polarité.")
+
+        st.markdown("---")
+        st.subheader("🔭 RADAR 2 : ZONE DE VEILLE PULLBACK (RSI < 50 EN POLARITÉ ACHETEUSE)")
+        if pullback_setups:
+            st.warning(f"👀 {len(pullback_setups)} actif(s) respirant sainement sous 50 en attendant le croisement 5 > 20 !")
+            cols2 = st.columns(min(len(pullback_setups), 4))
+            for idx, pb in enumerate(pullback_setups[:4]):
+                with cols2[idx]:
+                    st.markdown(f"#### **{pb['name']}** ({pb['symbol']})")
+                    st.write(f"**Prix Actuel** : `${pb['price']}`")
+                    st.write(f"**RSI (21)** : `{pb.get('rsi')} (< 50)`")
+                    st.write(f"**SMA 5** : `${round(pb.get('df_m5', pb['price']), 2)}` | **SMA 20** : `${round(pb.get('df_m20', pb['price']), 2)}`")
+        else:
+            st.info("ℹ️ Aucun actif actuellement en zone de pullback sous 50.")
+
     else:
+        # STRATÉGIE 3 : TRIPLE MM 5 / 20 / 80 (CLOUD 20/80 & PAOLO BBW)
         fresh_signals = [r for r in results if r.get("state") == "state_new_buy"]
-        st.subheader("🎯 RADAR 1 : SIGNAUX D'ACHAT (CLOUD 20/80)")
+        squeeze_setups = [r for r in results if r.get("bbw80_squeeze", r.get("bbw_squeeze")) and r.get("regime") == "regime_bull"]
+
+        st.subheader("🎯 RADAR 1 : SIGNAUX D'ACHAT FRAIS (SORTIE HAUT DU CLOUD 20/80)")
         if fresh_signals:
-            st.success(f"🔥 {len(fresh_signals)} signal(ux) frais détecté(s) !")
+            st.success(f"🔥 CASSURE DU CLOUD : {len(fresh_signals)} signal(ux) haussier(s) déclenché(s) !")
             cols1 = st.columns(min(len(fresh_signals), 4))
             for idx, sig in enumerate(fresh_signals[:4]):
                 with cols1[idx]:
                     st.markdown(f"#### **{sig['name']}** ({sig['symbol']})")
                     st.write(f"**Prix** : `${sig['price']}`")
+                    st.write(f"**Régime** : `🟢 ACHETEUR (P > Cloud)`")
+                    st.write(f"**RSI (21)** : `{sig.get('rsi')}`")
         else:
-            st.info("🛡️ Aucun signal d'achat frais Cloud 20/80 cette semaine.")
+            st.info("🛡️ Aucune nouvelle cassure du Cloud 20/80 enregistrée cette semaine.")
 
-    # Synthèse générale
+        st.markdown("---")
+        st.subheader("⚡ RADAR 2 : DÉTECTEUR SQUEEZE PAOLO BBW (COMPRESSION EXTRÊME EN FOND VERT)")
+        if squeeze_setups:
+            st.warning(f"💥 {len(squeeze_setups)} actif(s) sous tension extrême (Effet ressort BBW 80 en fond acheteur) !")
+            cols2 = st.columns(min(len(squeeze_setups), 4))
+            for idx, sq in enumerate(squeeze_setups[:4]):
+                with cols2[idx]:
+                    st.markdown(f"#### **{sq['name']}** ({sq['symbol']})")
+                    st.write(f"**Prix Actuel** : `${sq['price']}`")
+                    st.write(f"**Paolo BBW (80)** : `⚡ SQUEEZE ({sq.get('bbw80', sq.get('bbw'))}%)`")
+                    st.write(f"**RSI (21)** : `{sq.get('rsi')}`")
+        else:
+            st.info("ℹ️ Aucun actif en compression de volatilité BBW (80) en fond vert actuellement.")
+
+        # Synthèse générale
     st.markdown("---")
     k1, k2, k3, k4 = st.columns(4)
     k1.metric("Actifs Scannés", len(results))
