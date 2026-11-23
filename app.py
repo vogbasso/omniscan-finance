@@ -300,8 +300,6 @@ if results:
                 "Stop Loss": sl_str,
                 "TP1 (1:1)": tp1_str,
                 "TP2 (1:3)": tp2_str,
-                "Trailing": "Jusqu'à 20 < 320",
-                "BBW 320": bbw_str,
                 "Dist. ATH": f"{r.get('dist_ath_pct', 0.0):.1f}%"
             }
         elif is_pullback50_strategy:
@@ -317,7 +315,6 @@ if results:
                 "Signal Détecté": r.get("rsi_state", ""),
                 "Stop Loss": f"${r.get('rsi_sl')}" if r.get('rsi_sl') else "—",
                 "TP1 (1:1)": f"${r.get('rsi_tp1')}" if r.get('rsi_tp1') else "—",
-                "Paolo BBW (320)": bbw_str,
                 t["col_dist_ath"]: f"{r.get('dist_ath_pct', 0.0):.1f}%"
             }
         else:
@@ -330,7 +327,6 @@ if results:
                 "RSI (21)": rsi_display,
                 t["col_regime"]: t.get(r["regime"], r["regime"]),
                 "Signal Détecté": t.get(r["state"], r["state"]),
-                "Paolo BBW (80)": bbw_str,
                 t["col_dist_ath"]: f"{r.get('dist_ath_pct', 0.0):.1f}%"
             }
         table_data.append(row)
@@ -392,7 +388,7 @@ if results:
             .map(style_macro, subset=[col_macro])
             .map(style_signal, subset=[col_signal_key])
             .map(style_rsi_col, subset=[col_rsi_key])
-            .map(style_bbw, subset=[col_bbw])
+            
         )
         st.dataframe(styled_df, use_container_width=True, height=dynamic_height)
     except Exception:
