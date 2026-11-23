@@ -155,11 +155,11 @@ if results:
             cols2 = st.columns(min(len(pullback_ready), 4))
             for idx, pr in enumerate(pullback_ready[:4]):
                 with cols2[idx]:
-                    st.markdown(f"#### **{wc['name']}** ({wc['symbol']})")
-                    st.write(f"**Prix Actuel** : `${wc['price']}`")
-                    st.write(f"**SMA 20** : `${round(wc.get('df_m20', wc['price']), 2)}` | **SMA 320** : `${round(wc.get('df_m320', wc['price']), 2)}`")
-                    st.write(f"**Stop Loss** : `${wc.get('impulse_sl')}`")
-                    st.write(f"**TP1 (1:1)** : `${wc.get('impulse_tp1')}`")
+                    st.markdown(f"#### **{pr['name']}** ({pr['symbol']})")
+                    st.write(f"**Prix Actuel** : `${pr['price']}`")
+                    st.write(f"**SMA 20** : `${round(pr.get('df_m20', pr['price']), 2)}` | **SMA 320** : `${round(pr.get('df_m320', pr['price']), 2)}`")
+                    st.write(f"**Stop Loss** : `${pr.get('impulse_sl')}`")
+                    st.write(f"**TP1 (1:1)** : `${pr.get('impulse_tp1')}`")
         else:
             st.info("ℹ️ Aucune position en attente de confirmation 20 > 320.")
 
