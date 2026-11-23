@@ -249,14 +249,13 @@ class TechnicalIndicators:
     @staticmethod
     def evaluate_rsi21_sma20_320_strategy(df: pd.DataFrame) -> Dict[str, Any]:
         """
-        STRATÉGIE PAR DÉFAUT PAOLO BASSO : 
-        RSI 21 / SMA 20-320 AVEC VISUEL SMA 5 ET MÉCANISME PULLBACK < 50
-        - Phase de Vente Macro : SMA 20 < SMA 320
-        - Étape 1 : En phase baissière, le RSI 21 touche la zone des 70 (Surachat)
-        - Étape 2 : Le RSI revient respirer sous les 50 (RSI < 50)
-        - Étape 3 (Déclencheur) : Croisement haussier SMA 5 > SMA 20
-        - Stop Loss : Plus bas absolu de toute la phase baissière (20 < 320)
+        STRATÉGIE PAR DÉFAUT PAOLO BASSO :
+        - Tendance Macro : SMA 20 vs SMA 320 (Long Only)
+        - TRADE 1 (OBLIGATOIRE) : En tendance baissière (20 < 320), ENTRÉE DIRECTE dès que RSI 21 touche >= 70 !
+        - Stop Loss T1 : Plus bas absolu enregistré pendant toute la phase de vente (20 < 320)
         - Sorties : TP1 50% à 1:1, TP2 35% à 1:3, Trailing 15% jusqu'à repasse sous 320
+        - Confirmation ultérieure : Attente que SMA 20 croise au-dessus de SMA 320
+        - Respirations ultérieures (Optionnelles) : Confirmées par retour du RSI < 50
         """
         close_col = df['Close'] if 'Close' in df.columns else df['close']
         low_col = df['Low'] if 'Low' in df.columns else df['low']
@@ -264,8 +263,7 @@ class TechnicalIndicators:
         n = len(df)
         in_bear_phase = False
         bear_lowest_low = None
-        impulse_70_seen = False
-        pullback_under_50_seen = False
+        has_entered_trade1 = False
         active_trade = None
         trade_signals_history = []
         last_signal_event = None
@@ -287,23 +285,13 @@ class TechnicalIndicators:
                 if not in_bear_phase:
                     in_bear_phase = True
                     bear_lowest_low = low
-                    impulse_70_seen = False
-                    pullback_under_50_seen = False
+                    has_entered_trade1 = False
                 else:
                     bear_lowest_low = min(bear_lowest_low, low)
 
-                # Étape 1 : Le RSI touche la zone de surachat (>= 70)
-                if rsi >= 70:
-                    impulse_70_seen = True
-                    pullback_under_50_seen = False
-
-                # Étape 2 : Le RSI confirme le pullback sous 50
-                if impulse_70_seen and rsi < 50:
-                    pullback_under_50_seen = True
-
-                # Étape 3 : Déclencheur sur croisement haussier SMA 5 > SMA 20 après le pullback
-                is_crossover = (prev_m5 <= prev_m20 and m5 > m20)
-                if pullback_under_50_seen and is_crossover:
+                # ÉTAPE 1 : ENTRÉE DIRECTE & OBLIGATOIRE DÈS SURACHAT RSI >= 70 !
+                if rsi >= 70 and not has_entered_trade1:
+                    has_entered_trade1 = True
                     entry_price = close
                     sl_price = bear_lowest_low if (bear_lowest_low is not None and bear_lowest_low < entry_price) else low * 0.95
                     risk = entry_price - sl_price
@@ -316,7 +304,8 @@ class TechnicalIndicators:
                         "tp1": tp1,
                         "tp2": tp2,
                         "status": "WAIT_CONFIRMATION_20_320",
-                        "date": df.index[i]
+                        "date": df.index[i],
+                        "type": "T1 OBLIGATOIRE (RSI >= 70 sous 320)"
                     }
 
                     trade_signals_history.append({
@@ -325,14 +314,11 @@ class TechnicalIndicators:
                         "sl": sl_price,
                         "tp1": tp1,
                         "tp2": tp2,
-                        "label": "BUY ENTRY"
+                        "label": "T1 OBLIGATOIRE"
                     })
 
-                    impulse_70_seen = False
-                    pullback_under_50_seen = False
-
                     if i == n - 1:
-                        last_signal_event = "signal_buy_pullback_fresh"
+                        last_signal_event = "signal_t1_fresh"
 
             elif is_macro_bull:
                 in_bear_phase = False
@@ -345,16 +331,16 @@ class TechnicalIndicators:
         last_rsi = float(df['rsi21'].iloc[-1])
         macro_trend = "BULL" if last_m20 >= last_m320 else "BEAR"
 
-        if last_signal_event == "signal_buy_pullback_fresh":
-            state = "STATE_FRESH_BUY"
+        # Statuts du screener
+        if last_signal_event == "signal_t1_fresh":
+            state = "STATE_FRESH_T1_BUY"
         elif active_trade and active_trade["status"] == "TREND_CONFIRMED_BULL" and macro_trend == "BULL":
             state = "STATE_TREND_CONFIRMED"
         elif active_trade and active_trade["status"] == "WAIT_CONFIRMATION_20_320" and macro_trend == "BEAR":
-            state = "STATE_WAIT_CONFIRMATION"
-        elif macro_trend == "BEAR" and pullback_under_50_seen:
-            state = "STATE_PULLBACK_50_READY"     # Le pullback est sous 50, on guette le croisement SMA 5 > 20
-        elif macro_trend == "BEAR" and impulse_70_seen:
-            state = "STATE_OVERBOUGHT_IMPULSE"     # Le surachat a eu lieu, on attend le pullback sous 50
+            if last_rsi < 50:
+                state = "STATE_TRADE1_PULLBACK"    # Le Trade 1 est actif et respire sous 50 (pullback optionnel)
+            else:
+                state = "STATE_TRADE1_HOLDING"     # Le Trade 1 progresse vers le crossover 20 > 320
         elif macro_trend == "BEAR":
             state = "STATE_BEAR_WATCHING"
         else:

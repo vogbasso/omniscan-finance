@@ -81,7 +81,7 @@ st.sidebar.info(f"⏱️ **Timeframe** : {timeframe_display}")
 # En-tête
 if is_impulse_strategy:
     st.title("🌟 OmniScan Finance — Stratégie Reversal Impulsion (RSI 21 / SMA 20-320)")
-    st.caption("Surachat RSI 21 (>= 70) sous SMA 320 -> Pullback sous 50 -> Entrée Croisement SMA 5 > SMA 20 • SL Bas Bear • TP1 (50% @ 1:1) • TP2 (35% @ 1:3) • Trailing 15%")
+    st.caption("Entrée DIRECTE & OBLIGATOIRE dès Surachat RSI 21 (>= 70) sous SMA 320 • Confirmation ultérieure SMA 20 > 320 • Pullbacks < 50 Optionnels • SL Bas Bear • TP1 (50% @ 1:1) • TP2 (35% @ 1:3) • Trailing 15%")
 elif is_pullback50_strategy:
     st.title("🎯 OmniScan Finance — Stratégie RSI 21 / MM 5-20 & Pullback 50")
     st.caption("Polarité par transition 30/70 • Pullback sous 50 • Crossover MM 5/20 • Long Only")
@@ -122,40 +122,39 @@ if results:
     # RADARS SUR-MESURE DÉDIÉS À CHAQUE STRATÉGIE
     # ----------------------------------------------------
     if is_impulse_strategy:
-        # STRATÉGIE 1 : REVERSAL IMPULSION (RSI 21 / SMA 20-320)
-        fresh_buys = [r for r in results if r.get("impulse_state") == "STATE_FRESH_BUY"]
-        watching_reversal = [r for r in results if r.get("impulse_state") in ["STATE_PULLBACK_50_READY", "STATE_OVERBOUGHT_IMPULSE"]]
+        # STRATÉGIE 1 : TRADE 1 OBLIGATOIRE (RSI >= 70 SOUS 320) & PULLBACKS OPTIONNELS
+        fresh_t1_buys = [r for r in results if r.get("impulse_state") == "STATE_FRESH_T1_BUY"]
+        pullback_options = [r for r in results if r.get("impulse_state") == "STATE_TRADE1_PULLBACK"]
 
-        st.subheader("🎯 RADAR 1 : SIGNAUX D'ACHAT REVERSAL (SMA 5 > SMA 20 SOUS SMA 320)")
-        if fresh_buys:
-            st.success(f"🔥 ALERTE REVERSAL : {len(fresh_buys)} signal(ux) d'achat validé(s) cette semaine !")
-            cols1 = st.columns(min(len(fresh_buys), 4))
-            for idx, sig in enumerate(fresh_buys[:4]):
+        st.subheader("🎯 RADAR 1 : SIGNAUX D'ACHAT T1 OBLIGATOIRES (SURACHAT RSI ≥ 70 SOUS SMA 320)")
+        if fresh_t1_buys:
+            st.success(f"🔥 ALERTE ENTRÉE DIRECTE T1 : {len(fresh_t1_buys)} signal(ux) d'achat obligatoire(s) validé(s) cette semaine !")
+            cols1 = st.columns(min(len(fresh_t1_buys), 4))
+            for idx, sig in enumerate(fresh_t1_buys[:4]):
                 with cols1[idx]:
                     st.markdown(f"#### **{sig['name']}** ({sig['symbol']})")
                     st.write(f"**Prix Entrée** : `${sig['price']}`")
+                    st.write(f"**Signal** : `🔥 T1 OBLIGATOIRE`")
                     st.write(f"**Stop Loss (Bas Bear)** : `${sig.get('impulse_sl')}`")
                     st.write(f"**TP1 (50% @ 1:1)** : `${sig.get('impulse_tp1')}`")
                     st.write(f"**TP2 (35% @ 1:3)** : `${sig.get('impulse_tp2')}`")
-                    st.write(f"**Trailing (15%)** : `Jusqu'à 20 < 320`")
         else:
-            st.info("🛡️ Aucun signal d'achat reversal déclenché cette semaine sur cette sélection.")
+            st.info("🛡️ Aucun nouveau signal d'achat T1 obligatoire déclenché cette semaine.")
 
         st.markdown("---")
-        st.subheader("🔭 RADAR 2 : EN SALLE D'ATTENTE (IMPULSION VALIDÉE -> PULLBACK SOUS 50)")
-        if watching_reversal:
-            st.warning(f"👀 {len(watching_reversal)} actif(s) en cours d'armement de retournement sous la SMA 320 !")
-            cols2 = st.columns(min(len(watching_reversal), 4))
-            for idx, wr in enumerate(watching_reversal[:4]):
+        st.subheader("🔭 RADAR 2 : RESPIRATIONS / PULLBACKS SOUS 50 (RECHARGES OPTIONNELLES)")
+        if pullback_options:
+            st.warning(f"👀 {len(pullback_options)} actif(s) en position active respirant sous 50 (Recharge optionnelle possible) !")
+            cols2 = st.columns(min(len(pullback_options), 4))
+            for idx, po in enumerate(pullback_options[:4]):
                 with cols2[idx]:
-                    st.markdown(f"#### **{wr['name']}** ({wr['symbol']})")
-                    st.write(f"**Prix Actuel** : `${wr['price']}`")
-                    st.write(f"**RSI (21)** : `{wr.get('rsi')}`")
-                    phase_label = "⏳ Pullback < 50 (Guet Croisement 5/20)" if wr.get("impulse_state") == "STATE_PULLBACK_50_READY" else "🚀 Impulsion >= 70 (Attente Repli)"
-                    st.write(f"**Phase** : `{phase_label}`")
-                    st.write(f"**Stop Prévu (Bas)** : `${wr.get('impulse_sl')}`")
+                    st.markdown(f"#### **{po['name']}** ({po['symbol']})")
+                    st.write(f"**Prix Actuel** : `${po['price']}`")
+                    st.write(f"**RSI (21)** : `{po.get('rsi')} (< 50)`")
+                    st.write(f"**SMA 20** : `${round(po.get('df_m20', po['price']), 2)}` | **SMA 320** : `${round(po.get('df_m320', po['price']), 2)}`")
+                    st.write(f"**Statut** : `⏳ Pullback Optionnel`")
         else:
-            st.info("ℹ️ Aucun actif en phase d'armement ou de pullback sous 50 après impulsion.")
+            st.info("ℹ️ Aucun actif en phase de respiration sous 50 actuellement.")
 
     elif is_pullback50_strategy:
         # STRATÉGIE 2 : RSI 21 MOMENTUM & POLARITÉ (T1 / T2+ SL CASCADE)
@@ -260,18 +259,16 @@ if results:
         if is_impulse_strategy:
             macro_trend_label = "🟢 HAUSSIÈRE (20 > 320)" if r.get("macro_trend") == "BULL" else "🔴 BAISSIÈRE (20 < 320)"
             imp_state = r.get("impulse_state", "")
-            if imp_state == "STATE_FRESH_BUY":
-                statut_str = "🔥 ACHAT VALIDÉ (5 > 20)"
-            elif imp_state == "STATE_PULLBACK_50_READY":
-                statut_str = "⏳ PULLBACK < 50 (GUET 5/20)"
-            elif imp_state == "STATE_OVERBOUGHT_IMPULSE":
-                statut_str = "🚀 IMPULSION (RSI ≥ 70)"
+            if imp_state == "STATE_FRESH_T1_BUY":
+                statut_str = "🔥 ACHAT T1 OBLIGATOIRE (RSI ≥ 70)"
+            elif imp_state == "STATE_TRADE1_PULLBACK":
+                statut_str = "⏳ PULLBACK < 50 (RECHARGE OPTIONNELLE)"
+            elif imp_state == "STATE_TRADE1_HOLDING":
+                statut_str = "📈 T1 ACTIF (ATTENTE 20 > 320)"
             elif imp_state == "STATE_TREND_CONFIRMED":
                 statut_str = "🚀 TENDANCE CONFIRMÉE (20 > 320)"
-            elif imp_state == "STATE_WAIT_CONFIRMATION":
-                statut_str = "⏳ EN COURS (ATTENTE 20 > 320)"
             elif imp_state == "STATE_BEAR_WATCHING":
-                statut_str = "🔻 VEILLE (20 < 320)"
+                statut_str = "🔻 VEILLE BEAR (20 < 320)"
             else:
                 statut_str = "↗️ FLUX HAUSSIER ACTIF"
 
