@@ -81,7 +81,7 @@ st.sidebar.info(f"⏱️ **Timeframe** : {timeframe_display}")
 # En-tête
 if is_impulse_strategy:
     st.title("🌟 OmniScan Finance — Stratégie Reversal Impulsion (RSI 21 / SMA 20-320)")
-    st.caption("Achat sur Surachat RSI 21 (>= 70) en Tendance Baissière (SMA 20 < 320) • SL au plus bas bear market • TP1 50% (1:1) • TP2 35% (1:3) • Trailing 15%")
+    st.caption("Surachat RSI 21 (>= 70) sous SMA 320 -> Pullback sous 50 -> Entrée Croisement SMA 5 > SMA 20 • SL Bas Bear • TP1 (50% @ 1:1) • TP2 (35% @ 1:3) • Trailing 15%")
 elif is_pullback50_strategy:
     st.title("🎯 OmniScan Finance — Stratégie RSI 21 / MM 5-20 & Pullback 50")
     st.caption("Polarité par transition 30/70 • Pullback sous 50 • Crossover MM 5/20 • Long Only")
@@ -120,25 +120,36 @@ if results:
     
     # RADARS D'ALERTE
     if is_impulse_strategy:
-        fresh_impulse_buys = [r for r in results if r.get("impulse_state") == "STATE_FRESH_BUY_IMPULSE"]
-        waiting_conf = [r for r in results if r.get("impulse_state") == "STATE_WAIT_CONFIRMATION"]
+        fresh_impulse_buys = [r for r in results if r.get("impulse_state") == "STATE_FRESH_BUY"]
+        pullback_ready = [r for r in results if r.get("impulse_state") == "STATE_PULLBACK_50_READY"]
 
-        st.subheader("🎯 RADAR 1 : SIGNAUX D'ACHAT FRAIS (SURACHAT RSI ≥ 70 EN PHASE BAISSIÈRE)")
+        st.subheader("🎯 RADAR 1 : SIGNAUX D'ACHAT FRAIS (CROISEMENT SMA 5 > SMA 20 APRÈS PULLBACK < 50)")
         if fresh_impulse_buys:
-            st.success(f"🔥 ALERTE ACHAT REVERSAL : {len(fresh_impulse_buys)} signal(ux) d'impulsion validé(s) !")
+            st.success(f"🔥 ALERTE ACHAT VALIDÉE : {len(fresh_impulse_buys)} signal(ux) d'entrée validé(s) !")
             cols1 = st.columns(min(len(fresh_impulse_buys), 4))
             for idx, sig in enumerate(fresh_impulse_buys[:4]):
                 with cols1[idx]:
                     st.markdown(f"#### **{sig['name']}** ({sig['symbol']})")
                     st.write(f"**Prix Entrée** : `${sig['price']}`")
-                    st.write(f"**Stop Loss** : `${sig.get('impulse_sl')}`")
+                    st.write(f"**Stop Loss (Bas Bear)** : `${sig.get('impulse_sl')}`")
                     st.write(f"**TP1 (50% @ 1:1)** : `${sig.get('impulse_tp1')}`")
                     st.write(f"**TP2 (35% @ 1:3)** : `${sig.get('impulse_tp2')}`")
         else:
-            st.info("🛡️ Aucun signal d'achat impulsion frais déclenché cette semaine sur cette sélection.")
+            st.info("🛡️ Aucun signal d'achat frais déclenché cette semaine sur cette sélection.")
 
         st.markdown("---")
-        st.subheader("🔭 RADAR 2 : POSITIONS EN COURS (ATTENTE CONFIRMATION CROSSOVER 20 > 320)")
+        st.subheader("🔭 RADAR 2 : ZONE DE VEILLE (PULLBACK SOUS 50 EN COURS — ATTENTE CROISEMENT SMA 5 > 20)")
+        if pullback_ready:
+            st.warning(f"👀 {len(pullback_ready)} actif(s) ayant validé l'impulsion >= 70 et respirant sous 50 (À l'affût du croisement SMA 5 > 20) !")
+            cols2 = st.columns(min(len(pullback_ready), 4))
+            for idx, pr in enumerate(pullback_ready[:4]):
+                with cols2[idx]:
+                    st.markdown(f"#### **{pr['name']}** ({pr['symbol']})")
+                    st.write(f"**Prix Actuel** : `${pr['price']}`")
+                    st.write(f"**RSI (21)** : `{pr.get('rsi')} (< 50)`")
+                    st.write(f"**SMA 5** : `${round(pr.get('df_m5', pr['price']), 2)}` | **SMA 20** : `${round(pr.get('df_m20', pr['price']), 2)}`")
+        else:
+            st.info("ℹ️ Aucun actif actuellement en zone de pullback sous 50 après impulsion.")
         if waiting_conf:
             st.warning(f"👀 {len(waiting_conf)} actif(s) entrés sur impulsion en route vers la confirmation SMA 20 > 320 !")
             cols2 = st.columns(min(len(waiting_conf), 4))
@@ -216,12 +227,16 @@ if results:
         if is_impulse_strategy:
             macro_trend_label = "🟢 HAUSSIÈRE (20 > 320)" if r.get("macro_trend") == "BULL" else "🔴 BAISSIÈRE (20 < 320)"
             imp_state = r.get("impulse_state", "")
-            if imp_state == "STATE_FRESH_BUY_IMPULSE":
-                statut_str = "🔥 ACHAT IMPULSION (RSI ≥ 70)"
+            if imp_state == "STATE_FRESH_BUY":
+                statut_str = "🔥 ACHAT VALIDÉ (5 > 20)"
+            elif imp_state == "STATE_PULLBACK_50_READY":
+                statut_str = "⏳ PULLBACK < 50 (GUET 5/20)"
+            elif imp_state == "STATE_OVERBOUGHT_IMPULSE":
+                statut_str = "🚀 IMPULSION (RSI ≥ 70)"
             elif imp_state == "STATE_TREND_CONFIRMED":
                 statut_str = "🚀 TENDANCE CONFIRMÉE (20 > 320)"
             elif imp_state == "STATE_WAIT_CONFIRMATION":
-                statut_str = "⏳ POSITION ACTIVE (ATTENTE 20>320)"
+                statut_str = "⏳ EN COURS (ATTENTE 20 > 320)"
             elif imp_state == "STATE_BEAR_WATCHING":
                 statut_str = "🔻 VEILLE (20 < 320)"
             else:
@@ -359,9 +374,10 @@ if results:
             )
         )
         
-        # Étage 1 : Chandeliers & SMA
+        # Étage 1 : Chandeliers, SMA 5 (Visuel court terme), SMA 20 et Macro SMA
         fig.add_trace(go.Candlestick(x=df_chart.index, open=df_chart['Open'], high=df_chart['High'], low=df_chart['Low'], close=df_chart['Close'], name="Prix"), row=1, col=1)
-        fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['ma20'], line=dict(color='#ffaa00', width=2), name='SMA 20'), row=1, col=1)
+        fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['ma5'], line=dict(color='#00d4ff', width=1.5), name='SMA 5 (Court terme)'), row=1, col=1)
+        fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['ma20'], line=dict(color='#ffaa00', width=2), name='SMA 20 (Intermédiaire)'), row=1, col=1)
         fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart[active_macro_col], line=dict(color='#d000ff', width=2.5), name=macro_name), row=1, col=1)
 
         # Signaux d'entrée ▲

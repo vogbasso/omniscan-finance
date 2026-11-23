@@ -5,7 +5,6 @@ from typing import Tuple, Dict, Any, List
 class TechnicalIndicators:
     @staticmethod
     def calculate_sma(series: pd.Series, window: int) -> pd.Series:
-        """Moyenne Mobile Simple (SMA) avec min_periods adaptatif pour éviter les NaN"""
         return series.rolling(window=window, min_periods=1).mean()
 
     @staticmethod
@@ -34,12 +33,10 @@ class TechnicalIndicators:
 
     @staticmethod
     def calculate_paolo_bbw_compression(df: pd.DataFrame, period: int = 80, dev: float = 2.0, lookback: int = 52) -> Dict[str, Any]:
-        """Paolo BBW avec bande médiane strictement en SMA"""
         close = df['Close'] if 'Close' in df.columns else df['close']
         ma_col = f"ma{period}"
         middle = df[ma_col] if ma_col in df.columns else close.rolling(window=period, min_periods=1).mean()
         rolling_std = close.rolling(window=min(period, len(close)), min_periods=15).std().fillna(close.std())
-        
         upper = middle + (dev * rolling_std)
         lower = middle - (dev * rolling_std)
         bbw_series = ((upper - lower) / middle.replace(0, 1e-9)) * 100.0
@@ -64,31 +61,38 @@ class TechnicalIndicators:
 
     @staticmethod
     def evaluate_regime_and_state(df: pd.DataFrame) -> Tuple[str, str]:
-        """Méthode 2 : Triple MM Simple (SMA 5 / 20 / 80)"""
-        regime = "regime_bull" if df['ma20'].iloc[0] > df['ma80'].iloc[0] else "regime_bear"
+        regime = None
         is_fresh_signal = False
         last_signal = None
         close_col = df['Close'] if 'Close' in df.columns else df['close']
 
         for i in range(len(df)):
             p = float(close_col.iloc[i])
-            m5 = float(df['ma5'].iloc[i])
             m20 = float(df['ma20'].iloc[i])
             m80 = float(df['ma80'].iloc[i])
 
-            if m20 > m80 and (p < m5 and p < m20 and p < m80):
-                if regime != "regime_bear":
+            cloud_top = max(m20, m80)
+            cloud_bottom = min(m20, m80)
+
+            if p > cloud_top:
+                if regime is None:
+                    regime = "regime_bull"
+                elif regime != "regime_bull":
+                    regime = "regime_bull"
+                    if i == len(df) - 1:
+                        is_fresh_signal = True
+                        last_signal = "state_new_buy"
+            elif p < cloud_bottom:
+                if regime is None:
+                    regime = "regime_bear"
+                elif regime != "regime_bear":
                     regime = "regime_bear"
                     if i == len(df) - 1:
                         is_fresh_signal = True
                         last_signal = "state_new_sell"
 
-            elif m20 < m80 and (p > m5 and p > m20 and p > m80):
-                if regime != "regime_bull":
-                    regime = "regime_bull"
-                    if i == len(df) - 1:
-                        is_fresh_signal = True
-                        last_signal = "state_new_buy"
+        if regime is None:
+            regime = "regime_bear"
 
         if is_fresh_signal and last_signal:
             return regime, last_signal
@@ -113,7 +117,6 @@ class TechnicalIndicators:
 
     @staticmethod
     def evaluate_rsi21_polarity_strategy(df: pd.DataFrame) -> Dict[str, Any]:
-        """Méthode 1 : RSI 21 sur base Moyennes Mobiles Simples (SMA 5, SMA 20, SMA 320)"""
         polarity = "POLARITY_BEAR"
         for r in df['rsi21']:
             if r >= 70:
@@ -128,9 +131,6 @@ class TechnicalIndicators:
         pullback_in_progress = False
         returned_to_overbought = False
         structural_lows_history: List[float] = []
-        in_overbought = False
-        interval_low = None
-        trade_in_interval = False
 
         trade_count = 0
         last_signal_event = None
@@ -152,34 +152,20 @@ class TechnicalIndicators:
             prev_m20 = float(df['ma20'].iloc[i-1]) if i > 0 else m20
 
             if rsi >= 70:
-                if not in_overbought:
-                    if trade_in_interval and interval_low is not None:
-                        structural_lows_history.append(interval_low)
-                    trade_in_interval = False
-                    in_overbought = True
-                interval_low = None
-            else:
-                in_overbought = False
-                interval_low = low if interval_low is None else min(interval_low, low)
-
-            if rsi <= 30:
+                polarity = "POLARITY_BULL"
+                returned_to_overbought = True
+                if oversold_lowest_low is not None and not structural_lows_history:
+                    structural_lows_history = [oversold_lowest_low]
+            elif rsi <= 30:
                 polarity = "POLARITY_BEAR"
                 trade_count = 0
                 pullback_in_progress = False
                 returned_to_overbought = False
                 structural_lows_history.clear()
-                trade_in_interval = False
-                interval_low = None
                 if oversold_lowest_low is None or prev_rsi > 30:
                     oversold_lowest_low = low
                 else:
                     oversold_lowest_low = min(oversold_lowest_low, low)
-
-            elif rsi >= 70:
-                polarity = "POLARITY_BULL"
-                returned_to_overbought = True
-                if oversold_lowest_low is not None and not structural_lows_history:
-                    structural_lows_history = [oversold_lowest_low]
 
             if polarity == "POLARITY_BULL":
                 if returned_to_overbought and rsi < 50:
@@ -189,7 +175,6 @@ class TechnicalIndicators:
                     else:
                         current_pullback_lowest = min(current_pullback_lowest, low)
 
-                # Croisement SMA 5 > SMA 20
                 is_crossover = (prev_m5 <= prev_m20 and m5 > m20)
                 if pullback_in_progress and is_crossover:
                     trade_count += 1
@@ -211,7 +196,10 @@ class TechnicalIndicators:
                     risk = entry_price - sl
                     tp1 = entry_price + risk if risk > 0 else entry_price * 1.05
 
-                    trade_in_interval = True
+                    if current_pullback_lowest is not None:
+                        structural_lows_history.append(current_pullback_lowest)
+                    else:
+                        structural_lows_history.append(low)
 
                     pullback_in_progress = False
                     current_pullback_lowest = None
@@ -258,16 +246,17 @@ class TechnicalIndicators:
             "trade_signals_history": trade_signals_history
         }
 
-
     @staticmethod
     def evaluate_rsi21_sma20_320_strategy(df: pd.DataFrame) -> Dict[str, Any]:
         """
-        STRATÉGIE PAR DÉFAUT PAOLO BASSO : RSI 21 SURACHAT EN PHASE BAISSIÈRE (SMA 20/320)
-        - SMA 20 > SMA 320 : Tendance Haussière | SMA 20 < SMA 320 : Tendance Baissière
-        - Signal d'Achat : En tendance baissière (20 < 320), le RSI 21 touche >= 70 (Surachat confirmé)
-        - Stop Loss : Plus bas absolu enregistré pendant la phase de vente (20 < 320)
-        - Confirmation : Attendre que SMA 20 croise au-dessus de SMA 320
-        - Sorties : TP1 50% à 1:1, TP2 35% à 1:3, Solde 15% en trailing stop jusqu'à repasse sous 320
+        STRATÉGIE PAR DÉFAUT PAOLO BASSO : 
+        RSI 21 / SMA 20-320 AVEC VISUEL SMA 5 ET MÉCANISME PULLBACK < 50
+        - Phase de Vente Macro : SMA 20 < SMA 320
+        - Étape 1 : En phase baissière, le RSI 21 touche la zone des 70 (Surachat)
+        - Étape 2 : Le RSI revient respirer sous les 50 (RSI < 50)
+        - Étape 3 (Déclencheur) : Croisement haussier SMA 5 > SMA 20
+        - Stop Loss : Plus bas absolu de toute la phase baissière (20 < 320)
+        - Sorties : TP1 50% à 1:1, TP2 35% à 1:3, Trailing 15% jusqu'à repasse sous 320
         """
         close_col = df['Close'] if 'Close' in df.columns else df['close']
         low_col = df['Low'] if 'Low' in df.columns else df['low']
@@ -275,7 +264,8 @@ class TechnicalIndicators:
         n = len(df)
         in_bear_phase = False
         bear_lowest_low = None
-        has_triggered_buy_in_bear = False
+        impulse_70_seen = False
+        pullback_under_50_seen = False
         active_trade = None
         trade_signals_history = []
         last_signal_event = None
@@ -283,27 +273,37 @@ class TechnicalIndicators:
         for i in range(n):
             close = float(close_col.iloc[i])
             low = float(low_col.iloc[i])
+            m5 = float(df['ma5'].iloc[i])
             m20 = float(df['ma20'].iloc[i])
             m320 = float(df['ma320'].iloc[i])
+            prev_m5 = float(df['ma5'].iloc[i-1]) if i > 0 else m5
+            prev_m20 = float(df['ma20'].iloc[i-1]) if i > 0 else m20
             rsi = float(df['rsi21'].iloc[i])
-            prev_rsi = float(df['rsi21'].iloc[i-1]) if i > 0 else 50.0
 
-            # 1. Détection de la tendance macro (20 vs 320)
             is_macro_bear = m20 < m320
             is_macro_bull = m20 >= m320
 
-            # Entrée en phase baissière
             if is_macro_bear:
                 if not in_bear_phase:
                     in_bear_phase = True
                     bear_lowest_low = low
-                    has_triggered_buy_in_bear = False
+                    impulse_70_seen = False
+                    pullback_under_50_seen = False
                 else:
                     bear_lowest_low = min(bear_lowest_low, low)
 
-                # DÉCLENCHEUR D'ACHAT : RSI touche la zone des 70 (Surachat en plein bear market)
-                if rsi >= 70 and not has_triggered_buy_in_bear:
-                    has_triggered_buy_in_bear = True
+                # Étape 1 : Le RSI touche la zone de surachat (>= 70)
+                if rsi >= 70:
+                    impulse_70_seen = True
+                    pullback_under_50_seen = False
+
+                # Étape 2 : Le RSI confirme le pullback sous 50
+                if impulse_70_seen and rsi < 50:
+                    pullback_under_50_seen = True
+
+                # Étape 3 : Déclencheur sur croisement haussier SMA 5 > SMA 20 après le pullback
+                is_crossover = (prev_m5 <= prev_m20 and m5 > m20)
+                if pullback_under_50_seen and is_crossover:
                     entry_price = close
                     sl_price = bear_lowest_low if (bear_lowest_low is not None and bear_lowest_low < entry_price) else low * 0.95
                     risk = entry_price - sl_price
@@ -325,30 +325,36 @@ class TechnicalIndicators:
                         "sl": sl_price,
                         "tp1": tp1,
                         "tp2": tp2,
-                        "label": "BUY IMPULSE"
+                        "label": "BUY ENTRY"
                     })
 
-                    if i == n - 1:
-                        last_signal_event = "signal_buy_impulse_fresh"
+                    impulse_70_seen = False
+                    pullback_under_50_seen = False
 
-            # Passage en phase haussière (Confirmation 20 > 320)
+                    if i == n - 1:
+                        last_signal_event = "signal_buy_pullback_fresh"
+
             elif is_macro_bull:
                 in_bear_phase = False
                 if active_trade and active_trade["status"] == "WAIT_CONFIRMATION_20_320":
                     active_trade["status"] = "TREND_CONFIRMED_BULL"
 
-        # Diagnostic sur la dernière bougie
+        # Diagnostic temps réel sur la dernière bougie
         last_m20 = float(df['ma20'].iloc[-1])
         last_m320 = float(df['ma320'].iloc[-1])
         last_rsi = float(df['rsi21'].iloc[-1])
         macro_trend = "BULL" if last_m20 >= last_m320 else "BEAR"
 
-        if last_signal_event == "signal_buy_impulse_fresh":
-            state = "STATE_FRESH_BUY_IMPULSE"
+        if last_signal_event == "signal_buy_pullback_fresh":
+            state = "STATE_FRESH_BUY"
         elif active_trade and active_trade["status"] == "TREND_CONFIRMED_BULL" and macro_trend == "BULL":
             state = "STATE_TREND_CONFIRMED"
         elif active_trade and active_trade["status"] == "WAIT_CONFIRMATION_20_320" and macro_trend == "BEAR":
             state = "STATE_WAIT_CONFIRMATION"
+        elif macro_trend == "BEAR" and pullback_under_50_seen:
+            state = "STATE_PULLBACK_50_READY"     # Le pullback est sous 50, on guette le croisement SMA 5 > 20
+        elif macro_trend == "BEAR" and impulse_70_seen:
+            state = "STATE_OVERBOUGHT_IMPULSE"     # Le surachat a eu lieu, on attend le pullback sous 50
         elif macro_trend == "BEAR":
             state = "STATE_BEAR_WATCHING"
         else:
