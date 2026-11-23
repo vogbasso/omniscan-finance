@@ -249,13 +249,10 @@ class TechnicalIndicators:
     @staticmethod
     def evaluate_rsi21_sma20_320_strategy(df: pd.DataFrame) -> Dict[str, Any]:
         """
-        STRATÉGIE PAR DÉFAUT PAOLO BASSO :
-        - Tendance Macro : SMA 20 vs SMA 320 (Long Only)
-        - TRADE 1 (OBLIGATOIRE) : En tendance baissière (20 < 320), ENTRÉE DIRECTE dès que RSI 21 touche >= 70 !
-        - Stop Loss T1 : Plus bas absolu enregistré pendant toute la phase de vente (20 < 320)
-        - Sorties : TP1 50% à 1:1, TP2 35% à 1:3, Trailing 15% jusqu'à repasse sous 320
-        - Confirmation ultérieure : Attente que SMA 20 croise au-dessus de SMA 320
-        - Respirations ultérieures (Optionnelles) : Confirmées par retour du RSI < 50
+        STRATÉGIE PAR DÉFAUT PAOLO BASSO AVEC FENÊTRE DE FRAÎCHEUR (3 SEMAINES) ET SIGNAUX IMMINENTS :
+        - Trade 1 Obligatoire dès RSI 21 >= 70 sous SMA 320
+        - Fenêtre de fraîcheur : signaux récents sur les 3 dernières bougies
+        - Détection de signaux imminents (RSI entre 65.5 et 70 ou croisement 5/20 à < 2%)
         """
         close_col = df['Close'] if 'Close' in df.columns else df['close']
         low_col = df['Low'] if 'Low' in df.columns else df['low']
@@ -266,7 +263,7 @@ class TechnicalIndicators:
         has_entered_trade1 = False
         active_trade = None
         trade_signals_history = []
-        last_signal_event = None
+        last_trade_candle_idx = None
 
         for i in range(n):
             close = float(close_col.iloc[i])
@@ -274,8 +271,6 @@ class TechnicalIndicators:
             m5 = float(df['ma5'].iloc[i])
             m20 = float(df['ma20'].iloc[i])
             m320 = float(df['ma320'].iloc[i])
-            prev_m5 = float(df['ma5'].iloc[i-1]) if i > 0 else m5
-            prev_m20 = float(df['ma20'].iloc[i-1]) if i > 0 else m20
             rsi = float(df['rsi21'].iloc[i])
 
             is_macro_bear = m20 < m320
@@ -289,7 +284,7 @@ class TechnicalIndicators:
                 else:
                     bear_lowest_low = min(bear_lowest_low, low)
 
-                # ÉTAPE 1 : ENTRÉE DIRECTE & OBLIGATOIRE DÈS SURACHAT RSI >= 70 !
+                # ENTRÉE T1 DÈS SURACHAT RSI >= 70
                 if rsi >= 70 and not has_entered_trade1:
                     has_entered_trade1 = True
                     entry_price = close
@@ -298,6 +293,8 @@ class TechnicalIndicators:
                     tp1 = entry_price + (1.0 * risk)
                     tp2 = entry_price + (3.0 * risk)
 
+                    last_trade_candle_idx = i
+
                     active_trade = {
                         "entry": entry_price,
                         "sl": sl_price,
@@ -305,7 +302,7 @@ class TechnicalIndicators:
                         "tp2": tp2,
                         "status": "WAIT_CONFIRMATION_20_320",
                         "date": df.index[i],
-                        "type": "T1 OBLIGATOIRE (RSI >= 70 sous 320)"
+                        "candle_idx": i
                     }
 
                     trade_signals_history.append({
@@ -317,30 +314,71 @@ class TechnicalIndicators:
                         "label": "T1 OBLIGATOIRE"
                     })
 
-                    if i == n - 1:
-                        last_signal_event = "signal_t1_fresh"
-
             elif is_macro_bull:
                 in_bear_phase = False
                 if active_trade and active_trade["status"] == "WAIT_CONFIRMATION_20_320":
                     active_trade["status"] = "TREND_CONFIRMED_BULL"
 
-        # Diagnostic temps réel sur la dernière bougie
+        # Analyse de fraîcheur et d'imminence sur la dernière bougie
+        last_close = float(close_col.iloc[-1])
+        last_low = float(low_col.iloc[-1])
+        last_m5 = float(df['ma5'].iloc[-1])
         last_m20 = float(df['ma20'].iloc[-1])
         last_m320 = float(df['ma320'].iloc[-1])
         last_rsi = float(df['rsi21'].iloc[-1])
         macro_trend = "BULL" if last_m20 >= last_m320 else "BEAR"
 
-        # Statuts du screener
-        if last_signal_event == "signal_t1_fresh":
+        # 1. Détection de fraîcheur (3 dernières semaines)
+        is_recent_entry = False
+        candles_ago = None
+        freshness_badge = ""
+        perf_since_entry = 0.0
+
+        if active_trade and last_trade_candle_idx is not None:
+            candles_ago = (n - 1) - last_trade_candle_idx
+            # Si le trade date de moins de 4 semaines et que le Stop Loss n'a pas été cassé
+            if candles_ago <= 3 and last_low >= active_trade["sl"]:
+                is_recent_entry = True
+                perf_since_entry = round(((last_close - active_trade["entry"]) / active_trade["entry"]) * 100, 2)
+                if candles_ago == 0:
+                    freshness_badge = "🔥 CETTE SEMAINE"
+                elif candles_ago == 1:
+                    freshness_badge = "⚡ IL Y A 1 SEMAINE"
+                elif candles_ago == 2:
+                    freshness_badge = "⚡ IL Y A 2 SEMAINES"
+                else:
+                    freshness_badge = "⚡ IL Y A 3 SEMAINES"
+
+        # 2. Détection des signaux imminents (Prêts à arriver)
+        is_imminent_setup = False
+        imminent_label = ""
+
+        if macro_trend == "BEAR" and not has_entered_trade1:
+            # A. Pré-Surachat sous la SMA 320 (RSI entre 65.5 et 69.9)
+            if 65.5 <= last_rsi < 70.0:
+                is_imminent_setup = True
+                pts_missing = round(70.0 - last_rsi, 1)
+                imminent_label = f"🔭 Pré-Surachat (Manque {pts_missing} pts pour 70)"
+        elif macro_trend == "BEAR" and active_trade and last_rsi < 50:
+            # B. Pré-Croisement SMA 5 > 20 après pullback
+            if last_m5 < last_m20:
+                ma_gap_pct = abs(last_m20 - last_m5) / last_m20 * 100
+                if ma_gap_pct <= 2.0:
+                    is_imminent_setup = True
+                    imminent_label = f"🔭 Croisement 5 > 20 Imminent (Écart {round(ma_gap_pct, 1)}%)"
+
+        # Diagnostic d'état pour le tableau
+        if is_recent_entry and candles_ago == 0:
             state = "STATE_FRESH_T1_BUY"
+        elif is_recent_entry:
+            state = f"STATE_RECENT_T1_{candles_ago}W"
         elif active_trade and active_trade["status"] == "TREND_CONFIRMED_BULL" and macro_trend == "BULL":
             state = "STATE_TREND_CONFIRMED"
         elif active_trade and active_trade["status"] == "WAIT_CONFIRMATION_20_320" and macro_trend == "BEAR":
             if last_rsi < 50:
-                state = "STATE_TRADE1_PULLBACK"    # Le Trade 1 est actif et respire sous 50 (pullback optionnel)
+                state = "STATE_TRADE1_PULLBACK"
             else:
-                state = "STATE_TRADE1_HOLDING"     # Le Trade 1 progresse vers le crossover 20 > 320
+                state = "STATE_TRADE1_HOLDING"
         elif macro_trend == "BEAR":
             state = "STATE_BEAR_WATCHING"
         else:
@@ -350,6 +388,12 @@ class TechnicalIndicators:
             "macro_trend": macro_trend,
             "state": state,
             "active_trade": active_trade,
+            "is_recent_entry": is_recent_entry,
+            "candles_ago": candles_ago,
+            "freshness_badge": freshness_badge,
+            "perf_since_entry": perf_since_entry,
+            "is_imminent_setup": is_imminent_setup,
+            "imminent_label": imminent_label,
             "entry_price": round(active_trade["entry"], 4) if active_trade else None,
             "sl_price": round(active_trade["sl"], 4) if active_trade else None,
             "tp1_price": round(active_trade["tp1"], 4) if active_trade else None,

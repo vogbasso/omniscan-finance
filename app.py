@@ -122,39 +122,39 @@ if results:
     # RADARS SUR-MESURE DÉDIÉS À CHAQUE STRATÉGIE
     # ----------------------------------------------------
     if is_impulse_strategy:
-        # STRATÉGIE 1 : TRADE 1 OBLIGATOIRE (RSI >= 70 SOUS 320) & PULLBACKS OPTIONNELS
-        fresh_t1_buys = [r for r in results if r.get("impulse_state") == "STATE_FRESH_T1_BUY"]
-        pullback_options = [r for r in results if r.get("impulse_state") == "STATE_TRADE1_PULLBACK"]
+        # STRATÉGIE 1 : SIGNAUX RÉCENTS (3 SEMAINES) & SIGNAUX IMMINENTS (PRÊTS À ARRIVER)
+        recent_buys = [r for r in results if r.get("is_recent_entry")]
+        imminent_setups = [r for r in results if r.get("is_imminent_setup")]
 
-        st.subheader("🎯 RADAR 1 : SIGNAUX D'ACHAT T1 OBLIGATOIRES (SURACHAT RSI ≥ 70 SOUS SMA 320)")
-        if fresh_t1_buys:
-            st.success(f"🔥 ALERTE ENTRÉE DIRECTE T1 : {len(fresh_t1_buys)} signal(ux) d'achat obligatoire(s) validé(s) cette semaine !")
-            cols1 = st.columns(min(len(fresh_t1_buys), 4))
-            for idx, sig in enumerate(fresh_t1_buys[:4]):
+        st.subheader("🎯 RADAR 1 : SIGNAUX D'ACHAT RÉCENTS (FENÊTRE ACTIVE DES 3 DERNIÈRES SEMAINES)")
+        if recent_buys:
+            st.success(f"🔥 {len(recent_buys)} opportunité(s) d'achat validée(s) récemment et toujours en zone d'entrée !")
+            cols1 = st.columns(min(len(recent_buys), 4))
+            for idx, sig in enumerate(recent_buys[:4]):
                 with cols1[idx]:
                     st.markdown(f"#### **{sig['name']}** ({sig['symbol']})")
-                    st.write(f"**Prix Entrée** : `${sig['price']}`")
-                    st.write(f"**Signal** : `🔥 T1 OBLIGATOIRE`")
-                    st.write(f"**Stop Loss (Bas Bear)** : `${sig.get('impulse_sl')}`")
-                    st.write(f"**TP1 (50% @ 1:1)** : `${sig.get('impulse_tp1')}`")
-                    st.write(f"**TP2 (35% @ 1:3)** : `${sig.get('impulse_tp2')}`")
+                    st.write(f"**Timing** : `{sig.get('freshness_badge', 'ACTIF')}`")
+                    perf_sign = "+" if sig.get('perf_since_entry', 0) > 0 else ""
+                    st.write(f"**Prix** : `${sig['price']}` (`{perf_sign}{sig.get('perf_since_entry')}%`)")
+                    st.write(f"**Stop Loss** : `${sig.get('impulse_sl')}`")
+                    st.write(f"**TP1 (1:1)** : `${sig.get('impulse_tp1')}` | **TP2 (1:3)** : `${sig.get('impulse_tp2')}`")
         else:
-            st.info("🛡️ Aucun nouveau signal d'achat T1 obligatoire déclenché cette semaine.")
+            st.info("🛡️ Aucun signal d'achat déclenché au cours des 3 dernières semaines sur cette sélection.")
 
         st.markdown("---")
-        st.subheader("🔭 RADAR 2 : RESPIRATIONS / PULLBACKS SOUS 50 (RECHARGES OPTIONNELLES)")
-        if pullback_options:
-            st.warning(f"👀 {len(pullback_options)} actif(s) en position active respirant sous 50 (Recharge optionnelle possible) !")
-            cols2 = st.columns(min(len(pullback_options), 4))
-            for idx, po in enumerate(pullback_options[:4]):
+        st.subheader("🔭 RADAR 2 : SIGNAUX IMMINENTS / PRÊTS À ARRIVER (EN ZONE D'APPROCHE)")
+        if imminent_setups:
+            st.warning(f"👀 {len(imminent_setups)} actif(s) sur le point de déclencher un signal majeur !")
+            cols2 = st.columns(min(len(imminent_setups), 4))
+            for idx, imm in enumerate(imminent_setups[:4]):
                 with cols2[idx]:
-                    st.markdown(f"#### **{po['name']}** ({po['symbol']})")
-                    st.write(f"**Prix Actuel** : `${po['price']}`")
-                    st.write(f"**RSI (21)** : `{po.get('rsi')} (< 50)`")
-                    st.write(f"**SMA 20** : `${round(po.get('df_m20', po['price']), 2)}` | **SMA 320** : `${round(po.get('df_m320', po['price']), 2)}`")
-                    st.write(f"**Statut** : `⏳ Pullback Optionnel`")
+                    st.markdown(f"#### **{imm['name']}** ({imm['symbol']})")
+                    st.write(f"**Prix Actuel** : `${imm['price']}`")
+                    st.write(f"**RSI (21)** : `{imm.get('rsi')}`")
+                    st.write(f"**Alerte** : `{imm.get('imminent_label')}`")
+                    st.write(f"**Plancher Stop** : `${imm.get('impulse_sl')}`")
         else:
-            st.info("ℹ️ Aucun actif en phase de respiration sous 50 actuellement.")
+            st.info("ℹ️ Aucun actif actuellement en zone de pré-déclenchement immédiat.")
 
     elif is_pullback50_strategy:
         # STRATÉGIE 2 : RSI 21 MOMENTUM & POLARITÉ (T1 / T2+ SL CASCADE)
@@ -271,7 +271,9 @@ if results:
         if is_impulse_strategy:
             macro_trend_label = "🟢 HAUSSIÈRE (20 > 320)" if r.get("macro_trend") == "BULL" else "🔴 BAISSIÈRE (20 < 320)"
             imp_state = r.get("impulse_state", "")
-            if imp_state == "STATE_FRESH_T1_BUY":
+            if r.get("is_recent_entry"):
+                statut_str = f"🔥 ACHAT ({r.get('freshness_badge', 'RÉCENT')})"
+            elif imp_state == "STATE_FRESH_T1_BUY":
                 statut_str = "🔥 ACHAT T1 OBLIGATOIRE (RSI ≥ 70)"
             elif imp_state == "STATE_TRADE1_PULLBACK":
                 statut_str = "⏳ PULLBACK < 50 (RECHARGE OPTIONNELLE)"
